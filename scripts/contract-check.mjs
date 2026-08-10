@@ -48,4 +48,15 @@ assert.throws(() => validateDownstreamArtifact("manager", {
   ],
 }, "run-1", artifacts));
 
+assert.throws(() => validateDownstreamArtifact("maker", {
+  runId: "run-1",
+  stage: "maker",
+  selectedOpportunityId: "opp-1",
+  screens: [
+    { id: "one", components: [{ body: "Send JIRA-8420 when adoption reaches 80%." }] },
+    { id: "two", components: [] },
+    { id: "three", components: [] },
+  ],
+}, "run-1", artifacts));
+
 console.log("Contract checks passed: traceability, three-opportunity ranking and build governance.");

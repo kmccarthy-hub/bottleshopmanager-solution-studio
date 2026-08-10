@@ -176,6 +176,17 @@ export function validateDownstreamArtifact(stage, artifact, runId, inputs) {
   if (stage === "maker" && artifact.screens?.length !== 3) {
     throw new Error("The Maker must return exactly three prototype screens.");
   }
+  if (stage === "maker") {
+    const makerText = JSON.stringify(artifact);
+    const upstreamText = JSON.stringify({ researcher: inputs.researcher, designer: inputs.designer });
+    const unsupportedTokens = [
+      ...(makerText.match(/\b(?:JIRA|LINEAR)-?\d+\b/gi) ?? []),
+      ...(makerText.match(/\b\d+(?:\.\d+)?%\b/g) ?? []),
+    ].filter((token) => !upstreamText.toLowerCase().includes(token.toLowerCase()));
+    if (unsupportedTokens.length > 0) {
+      throw new Error(`The Maker invented unsupported identifiers or quantitative targets: ${[...new Set(unsupportedTokens)].join(", ")}. Use an explicit synthetic placeholder instead.`);
+    }
+  }
   if (stage === "manager") {
     const rankedIds = artifact.ranking?.map((item) => item.opportunityId) ?? [];
     if (rankedIds.length !== 3 || new Set(rankedIds).size !== 3 || rankedIds.some((id) => !opportunityIds.has(id))) {

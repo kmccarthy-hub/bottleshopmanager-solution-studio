@@ -43,21 +43,33 @@ export function createAgentHandler(stage) {
 
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      const result = await ai.models.generateContent({
-        model: process.env.GEMINI_MODEL,
-        contents: [{
-          role: "user",
-          parts: [{ text: `Continue Opportunity Lens run ${runId}. Review every supplied upstream artefact, perform only the ${stage} responsibilities, and return the required handoff.\n\nUPSTREAM ARTEFACTS\n${JSON.stringify(artifacts)}` }],
-        }],
-        config: {
-          systemInstruction: definition.agent.systemPrompt,
-          responseMimeType: "application/json",
-          responseJsonSchema: definition.schema,
-        },
-      });
-      const artifact = JSON.parse(result.text);
-      validateDownstreamArtifact(stage, artifact, runId, artifacts);
-      return response.status(200).json({ runId, stage, aiDisclosure: "AI-generated analysis - verify before use", artifact });
+      let repairInstruction = "";
+      let lastError;
+      for (let attempt = 1; attempt <= 2; attempt += 1) {
+        try {
+          const result = await ai.models.generateContent({
+            model: process.env.GEMINI_MODEL,
+            contents: [{
+              role: "user",
+              parts: [{ text: `Continue Opportunity Lens run ${runId}. Review every supplied upstream artefact, perform only the ${stage} responsibilities, and return the required handoff.${repairInstruction}\n\nUPSTREAM ARTEFACTS\n${JSON.stringify(artifacts)}` }],
+            }],
+            config: {
+              systemInstruction: definition.agent.systemPrompt,
+              responseMimeType: "application/json",
+              responseJsonSchema: definition.schema,
+            },
+          });
+          const artifact = JSON.parse(result.text);
+          validateDownstreamArtifact(stage, artifact, runId, artifacts);
+          return response.status(200).json({ runId, stage, validationAttempts: attempt, aiDisclosure: "AI-generated analysis - verify before use", artifact });
+        } catch (error) {
+          lastError = error;
+          if (attempt === 1) {
+            repairInstruction = `\n\nYour previous draft failed server validation: ${error instanceof Error ? error.message : "invalid output"}. Correct that specific failure without changing the supplied evidence or inventing replacement facts.`;
+          }
+        }
+      }
+      throw lastError;
     } catch (error) {
       return response.status(500).json({ runId, stage, error: error instanceof Error ? error.message : `The ${stage} stage failed.`, aiDisclosure: "No completed AI recommendation was produced." });
     }
