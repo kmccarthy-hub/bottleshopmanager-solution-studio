@@ -26,7 +26,7 @@ type Artifacts = { researcher?: ResearcherArtifact; designer?: DesignerArtifact;
 
 const initialStatuses: Record<StageKey, StageStatus> = { researcher: "idle", designer: "idle", maker: "idle", communicator: "idle", manager: "idle" };
 const lensCopy = { focused: "Smallest credible intervention", integrated: "Connected operational workflow", exploratory: "Ambitious, higher-uncertainty direction" };
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "";
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || window.location.origin).replace(/\/$/, "");
 
 export default function Home() {
   const [backlog, setBacklog] = useState<BacklogIssue[]>([]);
