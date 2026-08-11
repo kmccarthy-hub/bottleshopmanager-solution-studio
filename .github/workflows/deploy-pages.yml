@@ -1,4 +1,4 @@
-name: Deploy Opportunity Lens to GitHub Pages
+name: Deploy BottleShopManager Solution Studio to GitHub Pages
 
 on:
   push:

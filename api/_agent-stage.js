@@ -51,7 +51,7 @@ export function createAgentHandler(stage) {
             model: process.env.GEMINI_MODEL,
             contents: [{
               role: "user",
-              parts: [{ text: `Continue Opportunity Lens run ${runId}. Review every supplied upstream artefact, perform only the ${stage} responsibilities, and return the required handoff.${repairInstruction}\n\nUPSTREAM ARTEFACTS\n${JSON.stringify(artifacts)}` }],
+              parts: [{ text: `Continue BottleShopManager Solution Studio run ${runId}. Review every supplied upstream artefact, perform only the ${stage} responsibilities, preserve all information gaps and return the required handoff.${repairInstruction}\n\nUPSTREAM ARTEFACTS\n${JSON.stringify(artifacts)}` }],
             }],
             config: {
               systemInstruction: definition.agent.systemPrompt,
