@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import BottleShopPlatform from "./bottle-shop-platform";
+import PrototypeRenderer, { type InteractivePrototype } from "./prototype-renderer";
 
 const stages = [
   { number: "01", key: "researcher", role: "Researcher", name: "Maeve O'Connell", accent: "cyan", output: "Live request + information-quality brief" },
@@ -13,11 +15,9 @@ type StageStatus = "idle" | "running" | "complete" | "error";
 type BacklogIssue = { number: number; title: string; state: string; labels: string[]; updatedAt: string; sourceUrl: string; body: string };
 type Gap = { category: string; missingInformation: string; whyItMatters: string; questionForProductManager: string; sourceAgents?: string[] };
 type ResearcherArtifact = { featureRequest: { issueNumber: number; title: string; sourceUrl: string; summary: string }; requestAssessment: { completeness: "low" | "medium" | "high"; confidenceRationale: string; knownFacts: string[]; missingInformation: Gap[] }; problemFrame: { primaryUser: string; problemStatement: string; desiredOutcome: string }; handoffSummary: string };
-type Concept = { id: string; lens: "focused" | "integrated" | "exploratory"; title: string; oneLineSummary: string; intendedUser: string; evidenceFit: string; assumptions: string[]; tradeoffs: string[]; risks: string[] };
+type Concept = { id: string; lens: "focused" | "integrated" | "exploratory"; title: string; oneLineSummary: string; intendedUser: string; baselineSurface: string; currentWorkflowReference: string; evidenceFit: string; assumptions: string[]; tradeoffs: string[]; risks: string[] };
 type DesignerArtifact = { concepts: Concept[]; conceptDistinctness: string; informationGaps: Gap[]; handoffSummary: string };
-type PrototypeComponent = { id: string; type: string; title: string; body: string; label: string; action: { type: string; target: string } | null };
-type Prototype = { conceptId: string; title: string; purpose: string; testableAssumption: string; components: PrototypeComponent[]; exceptionalState: string; limitations: string[] };
-type MakerArtifact = { prototypes: Prototype[]; informationGaps: Gap[] };
+type MakerArtifact = { prototypes: InteractivePrototype[]; informationGaps: Gap[] };
 type OptionBrief = { conceptId: string; headline: string; executiveSummary: string; intendedUser: string; valueProposition: string; strengths: string[]; risks: string[]; prototypeExplanation: string };
 type CommunicatorArtifact = { optionBriefs: OptionBrief[]; comparisonSummary: string; informationGaps: Gap[] };
 type Ranking = { rank: number; conceptId: string; title: string; lens: string; confidence: string; complexity: string; executiveSummary: string; agentContributions: { researcher: string; designer: string; maker: string; communicator: string } };
@@ -29,6 +29,7 @@ const lensCopy = { focused: "Smallest credible intervention", integrated: "Conne
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || window.location.origin).replace(/\/$/, "");
 
 export default function Home() {
+  const [workspaceView, setWorkspaceView] = useState<"studio" | "platform">("studio");
   const [backlog, setBacklog] = useState<BacklogIssue[]>([]);
   const [backlogState, setBacklogState] = useState<"loading" | "ready" | "error" | "preview">(API_BASE_URL ? "loading" : "preview");
   const [backlogError, setBacklogError] = useState("");
@@ -39,7 +40,6 @@ export default function Home() {
   const [toolReceipt, setToolReceipt] = useState<{ completedAt: string; responseStatus: number; selectedIssueNumber: number; backlogIssueCount: number; returnedCommentCount: number } | null>(null);
   const [runError, setRunError] = useState("");
   const [prototypeId, setPrototypeId] = useState("");
-  const [expandedComponent, setExpandedComponent] = useState("");
   const apiBaseUrl = API_BASE_URL;
   const selectedIssue = backlog.find((issue) => issue.number === selectedNumber);
   const runActive = Object.values(statuses).includes("running");
@@ -65,7 +65,7 @@ export default function Home() {
 
   async function exploreSolutions() {
     if (!apiBaseUrl || !selectedNumber) return;
-    setRunError(""); setArtifacts({}); setStatuses(initialStatuses); setToolReceipt(null); setPrototypeId(""); setExpandedComponent("");
+    setRunError(""); setArtifacts({}); setStatuses(initialStatuses); setToolReceipt(null); setPrototypeId("");
     let currentStage: StageKey = "researcher";
     try {
       setActiveStage(0); setStageStatus("researcher", "running");
@@ -90,9 +90,10 @@ export default function Home() {
     <div className="ambient ambient-one" /><div className="ambient ambient-two" />
     <header className="topbar">
       <a className="brand" href="#top" aria-label="BottleShopManager Solution Studio home"><span className="bsm-mark" aria-hidden="true"><i /><i /><i /></span><span>BottleShopManager</span><span className="product-name">Solution Studio</span></a>
-      <div className="topbar-meta"><span className="disclosure-pill"><span className="spark">✦</span>AI-assisted exploration</span><span className="synthetic-pill">Synthetic academic backlog</span><a className="text-link" href="#pipeline">Five-agent method</a></div>
+      <div className="topbar-meta"><div className="workspace-switch" aria-label="Choose BottleShopManager workspace"><button type="button" className={workspaceView === "platform" ? "active" : ""} onClick={() => setWorkspaceView("platform")}>Current platform</button><button type="button" className={workspaceView === "studio" ? "active" : ""} onClick={() => setWorkspaceView("studio")}>Solution Studio</button></div><span className="disclosure-pill"><span className="spark">✦</span>AI-assisted exploration</span><span className="synthetic-pill">Synthetic academic backlog</span></div>
     </header>
 
+    {workspaceView === "platform" ? <BottleShopPlatform onOpenStudio={() => setWorkspaceView("studio")} /> : <>
     <section className="studio-hero" id="top">
       <div className="studio-copy"><p className="eyebrow"><span /> Internal product concept studio</p><h1>Explore a backlog request from <em>three angles</em> before committing.</h1><p className="hero-lede">Select one live BottleShopManager feature request. Five specialised AI agents investigate its quality, build three solution concepts and provide one advisory recommendation—while the Product Manager keeps the decision.</p><div className="studio-principles"><span>Live GitHub backlog</span><span>Three comparable prototypes</span><span>Information gaps made visible</span></div></div>
 
@@ -125,9 +126,9 @@ export default function Home() {
         <aside className="live-receipt"><span className="card-kicker">Agent-requested tool receipt</span><div className="tool-name"><code>fetch_selected_feature_request</code><strong>{toolReceipt ? "Completed" : "Waiting"}</strong></div><div className="receipt-list"><div><span>Selected issue</span><strong>{toolReceipt ? `#${toolReceipt.selectedIssueNumber}` : "—"}</strong></div><div><span>Backlog context</span><strong>{toolReceipt ? `${toolReceipt.backlogIssueCount} live requests` : "—"}</strong></div><div><span>Comments retrieved</span><strong>{toolReceipt?.returnedCommentCount ?? "—"}</strong></div><div><span>GitHub response</span><strong>{toolReceipt ? `HTTP ${toolReceipt.responseStatus}` : "—"}</strong></div><div><span>Query time</span><strong>{toolReceipt ? new Date(toolReceipt.completedAt).toLocaleString("en-IE") : "—"}</strong></div></div></aside>
       </div>
 
-      {artifacts.designer && <><div className="result-section-title"><span>Designer output</span><h3>Three deliberately different solution directions</h3><p>{artifacts.designer.conceptDistinctness}</p></div><div className="concept-grid">{artifacts.designer.concepts.map((concept) => <article className={`concept-card lens-${concept.lens}`} key={concept.id}><div className="concept-top"><span>{concept.lens}</span><small>{lensCopy[concept.lens]}</small></div><h3>{concept.title}</h3><p>{concept.oneLineSummary}</p><div className="concept-meta"><span>Evidence fit</span><strong>{concept.evidenceFit}</strong></div><details><summary>Assumptions and trade-offs</summary><ul>{[...concept.assumptions, ...concept.tradeoffs].map((item) => <li key={item}>{item}</li>)}</ul></details></article>)}</div></>}
+      {artifacts.designer && <><div className="result-section-title"><span>Designer output</span><h3>Three deliberately different solution directions</h3><p>{artifacts.designer.conceptDistinctness}</p></div><div className="concept-grid">{artifacts.designer.concepts.map((concept) => <article className={`concept-card lens-${concept.lens}`} key={concept.id}><div className="concept-top"><span>{concept.lens}</span><small>{lensCopy[concept.lens]}</small></div><h3>{concept.title}</h3><p>{concept.oneLineSummary}</p><div className="concept-meta"><span>Current product surface</span><strong>{concept.baselineSurface} · {concept.currentWorkflowReference}</strong></div><div className="concept-meta"><span>Evidence fit</span><strong>{concept.evidenceFit}</strong></div><details><summary>Assumptions and trade-offs</summary><ul>{[...concept.assumptions, ...concept.tradeoffs].map((item) => <li key={item}>{item}</li>)}</ul></details></article>)}</div></>}
 
-      {artifacts.maker && currentPrototype && <article className="result-panel prototype-panel"><div className="panel-heading"><div><span className="card-kicker">Maker · three AI-generated prototypes</span><h3>Compare the operational moment</h3></div><span className="generated-chip">Synthetic prototype · not production</span></div><div className="prototype-shell studio-prototype"><nav aria-label="Solution prototypes">{artifacts.maker.prototypes.map((prototype) => { const concept = artifacts.designer?.concepts.find((item) => item.id === prototype.conceptId); return <button type="button" key={prototype.conceptId} className={prototype.conceptId === currentPrototype.conceptId ? "active" : ""} onClick={() => { setPrototypeId(prototype.conceptId); setExpandedComponent(""); }}><span>{concept?.lens}</span>{prototype.title}</button>; })}</nav><div className="prototype-intro"><div><span className="card-kicker">Assumption under test</span><h4>{currentPrototype.title}</h4><p>{currentPrototype.testableAssumption}</p></div><p>{currentPrototype.purpose}</p></div><div className="prototype-canvas">{currentPrototype.components.map((component) => <button type="button" className={`prototype-component component-${component.type} ${expandedComponent === component.id ? "selected" : ""}`} key={component.id} disabled={!component.action} onClick={() => setExpandedComponent(expandedComponent === component.id ? "" : component.id)}><span>{component.type}</span><strong>{component.title || component.label}</strong><p>{component.body}</p>{component.action && <small>{component.label || component.action.type} →</small>}</button>)}</div><div className="prototype-limit"><strong>What this does not prove</strong><p>{currentPrototype.limitations.join(" · ")}</p></div></div></article>}
+      {artifacts.maker && currentPrototype && <article className="result-panel prototype-panel"><div className="panel-heading"><div><span className="card-kicker">Maker · three AI-generated prototypes</span><h3>Compare current product to proposed workflows</h3></div><span className="generated-chip">Interactive synthetic prototype · not production</span></div><div className="prototype-shell studio-prototype"><nav aria-label="Solution prototypes">{artifacts.maker.prototypes.map((prototype) => { const concept = artifacts.designer?.concepts.find((item) => item.id === prototype.conceptId); return <button type="button" key={prototype.conceptId} className={prototype.conceptId === currentPrototype.conceptId ? "active" : ""} onClick={() => setPrototypeId(prototype.conceptId)}><span>{concept?.lens}</span>{prototype.title}</button>; })}</nav><div className="prototype-intro"><div><span className="card-kicker">Assumption under test</span><h4>{currentPrototype.title}</h4><p>{currentPrototype.testableAssumption}</p></div><p>{currentPrototype.purpose}</p></div><PrototypeRenderer key={currentPrototype.conceptId} prototype={currentPrototype} lens={artifacts.designer?.concepts.find((item) => item.id === currentPrototype.conceptId)?.lens ?? "concept"} /><div className="prototype-limit"><strong>What this does not prove</strong><p>{currentPrototype.limitations.join(" · ")}</p></div></div></article>}
 
       {artifacts.communicator && <article className="result-panel"><div className="panel-heading"><div><span className="card-kicker">Communicator · internal AI draft</span><h3>Decision briefs, not launch promises</h3></div><span className="draft-chip">Draft · internal only</span></div><p>{artifacts.communicator.comparisonSummary}</p><div className="brief-grid">{artifacts.communicator.optionBriefs.map((brief) => <div key={brief.conceptId}><span>{artifacts.designer?.concepts.find((item) => item.id === brief.conceptId)?.lens}</span><strong>{brief.headline}</strong><p>{brief.executiveSummary}</p></div>)}</div></article>}
 
@@ -135,6 +136,7 @@ export default function Home() {
 
       {artifacts.manager && <article className="gap-panel"><div className="panel-heading"><div><span className="card-kicker">Cumulative information-gap tracker</span><h3>Improve the backlog request, then run it again.</h3></div><span className="gap-count">{artifacts.manager.consolidatedInformationGaps.length} questions</span></div><p>{artifacts.manager.informationQualitySummary}</p>{artifacts.manager.consolidatedInformationGaps.length ? <div className="gap-list">{artifacts.manager.consolidatedInformationGaps.map((gap, index) => <div key={`${gap.category}-${index}`}><span>{gap.category}</span><div><strong>{gap.questionForProductManager}</strong><p>{gap.whyItMatters}</p><small>Raised by: {gap.sourceAgents?.join(", ")}</small></div></div>)}</div> : <div className="no-gaps">No critical information gaps remained in this run. Validate the assumptions with real users before commitment.</div>}</article>}
     </section>}
+    </>}
 
     <footer><span>BottleShopManager · Solution Studio</span><span>Fictional Irish B2B retail platform · Synthetic academic prototype</span><span>AI advises · Product Manager decides</span></footer>
   </main>;

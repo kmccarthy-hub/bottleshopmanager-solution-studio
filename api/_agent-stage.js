@@ -7,6 +7,7 @@ import {
   managerOutputSchema,
   validateDownstreamArtifact,
 } from "../contracts/downstream.js";
+import { productBaselinePrompt } from "../domain/product-baseline.js";
 
 const definitions = {
   designer: { agent: agents.designer, schema: designerOutputSchema, required: ["researcher"] },
@@ -51,7 +52,7 @@ export function createAgentHandler(stage) {
             model: process.env.GEMINI_MODEL,
             contents: [{
               role: "user",
-              parts: [{ text: `Continue BottleShopManager Solution Studio run ${runId}. Review every supplied upstream artefact, perform only the ${stage} responsibilities, preserve all information gaps and return the required handoff.${repairInstruction}\n\nUPSTREAM ARTEFACTS\n${JSON.stringify(artifacts)}` }],
+              parts: [{ text: `Continue BottleShopManager Solution Studio run ${runId}. Review every supplied upstream artefact, perform only the ${stage} responsibilities, preserve all information gaps and return the required handoff. Use the supplied current-product baseline to locate proposed changes, but never treat the baseline as customer evidence.${repairInstruction}\n\n${productBaselinePrompt}\n\nUPSTREAM ARTEFACTS\n${JSON.stringify(artifacts)}` }],
             }],
             config: {
               systemInstruction: definition.agent.systemPrompt,
