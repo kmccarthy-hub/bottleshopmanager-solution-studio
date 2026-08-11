@@ -16,6 +16,6 @@
       "@/*": ["./*"]
     }
   },
-  "include": ["app/page.tsx", "src/**/*.ts", "src/**/*.tsx", "api/**/*.js", "contracts/**/*.js", "agent-prompts/**/*.js"],
+  "include": ["app/**/*.tsx", "src/**/*.ts", "src/**/*.tsx", "api/**/*.js", "contracts/**/*.js", "agent-prompts/**/*.js", "domain/**/*.js"],
   "exclude": ["node_modules", "dist"]
 }

@@ -1,30 +1,23 @@
-# EvidenceLoop Opportunity Lens
+# BottleShopManager Solution Studio
 
-Opportunity Lens is a desktop-first academic prototype for a fictional product-management software company. A human product manager triggers a five-agent pipeline that queries the current synthetic feedback in the public `evidenceloop-feedback` GitHub repository.
+Solution Studio is a desktop-first academic prototype for the internal Product Managers of BottleShopManager, a fictional B2B platform used by independent Irish off-licence shops and small chains to manage stock, suppliers, orders, staff workflows and operational reporting.
+
+A Product Manager selects one live synthetic feature request from GitHub. Five distinct AI agents assess the request, create three solution directions, make those directions tangible and provide one advisory recommendation. Missing backlog information remains visible throughout the chain.
 
 ## Agent chain
 
-1. Researcher explicitly calls `fetch_customer_feedback` and produces three traceable opportunities.
-2. Designer compares solution directions and selects one concept.
-3. Maker returns a constrained, clickable three-screen prototype definition.
-4. Communicator drafts an internal decision story and an unsent customer-validation invitation.
-5. Manager audits the chain, ranks all three opportunities and recommends build, validate or park.
+1. Researcher explicitly calls `fetch_selected_feature_request` for the selected issue and assesses its information quality.
+2. Designer creates one focused, one integrated and one exploratory concept.
+3. Maker creates one constrained interactive prototype for each concept.
+4. Communicator creates three comparable internal decision briefs.
+5. Manager ranks the concepts, explains every agent's contribution and consolidates questions that would improve the backlog request.
 
-All outputs are visibly labelled as AI-generated. The Manager is advisory; a human product leader retains approval.
+The Manager does not select, approve or write anything back. The Product Manager retains the final decision.
 
-## Local setup
+## Deployment
 
-Copy `.env.example` to the deployment environment and supply server-side Gemini credentials. Never commit the key.
-
-```text
-npm install
-npm run dev
-npm run build
-npm run lint
-```
-
-The static Vite frontend is intended for GitHub Pages. The five serverless API handlers are intended for Vercel. `VITE_API_BASE_URL` connects the two deployments.
+The static Vite frontend is designed for GitHub Pages. Five serverless agent handlers and the public backlog endpoint are designed for Vercel. `VITE_API_BASE_URL` connects the two deployments. Gemini credentials remain server-side.
 
 ## Live source
 
-The Researcher tool queries every issue in the dedicated public repository at run time with `Cache-Control: no-store`. The application does not bundle or cache a fallback copy of the feedback.
+The dedicated public `bottleshopmanager-backlog` repository contains ten clearly labelled synthetic feature requests. The Researcher requests the selected issue, comments and live backlog context at runtime with caching disabled. No bundled backlog substitutes for the tool result.

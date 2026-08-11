@@ -1,151 +1,144 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import BottleShopPlatform from "./bottle-shop-platform";
+import PrototypeRenderer, { type InteractivePrototype } from "./prototype-renderer";
 
 const stages = [
-  { number: "01", key: "researcher", role: "Researcher", name: "Aisling Byrne", accent: "cyan", summary: "Calls the live feedback tool and identifies three evidence-backed opportunities.", output: "Opportunity research brief" },
-  { number: "02", key: "designer", role: "Designer", name: "Luca Moretti", accent: "violet", summary: "Challenges the lead opportunity and turns it into a focused solution concept.", output: "Solution concept + user journey" },
-  { number: "03", key: "maker", role: "Maker", name: "Priya Shah", accent: "coral", summary: "Builds a safe, clickable three-screen prototype from the approved design brief.", output: "Interactive feature prototype" },
-  { number: "04", key: "communicator", role: "Communicator", name: "Niamh Doyle", accent: "amber", summary: "Prepares an honest customer validation package and internal decision story.", output: "Validation invitation + pitch" },
-  { number: "05", key: "manager", role: "Manager", name: "Elias Grant", accent: "blue", summary: "Reviews the full chain, ranks three opportunities and recommends the next action.", output: "Build / validate / park decision" },
+  { number: "01", key: "researcher", role: "Researcher", name: "Maeve O'Connell", accent: "cyan", output: "Live request + information-quality brief" },
+  { number: "02", key: "designer", role: "Designer", name: "Jonas Berg", accent: "violet", output: "Focused, integrated + exploratory concepts" },
+  { number: "03", key: "maker", role: "Maker", name: "Priya Shah", accent: "coral", output: "Three comparable interactive prototypes" },
+  { number: "04", key: "communicator", role: "Communicator", name: "Niamh Doyle", accent: "amber", output: "Three decision-ready option briefs" },
+  { number: "05", key: "manager", role: "Manager", name: "Elias Grant", accent: "blue", output: "Ranked recommendation + backlog questions" },
 ] as const;
 
 type StageKey = typeof stages[number]["key"];
 type StageStatus = "idle" | "running" | "complete" | "error";
-type Opportunity = { id: string; title: string; problemStatement: string; evidenceIssueNumbers: number[]; confidence: string };
-type ResearcherArtifact = { opportunities: Opportunity[]; provisionalRanking: string[]; leadOpportunityId: string; leadRationale: string; handoffSummary: string };
-type DesignerArtifact = { selectedOpportunityId: string; problemStatement: string; desiredOutcome: string; selectedConceptId: string; selectionRationale: string; alternatives: { id: string; name: string; concept: string }[]; handoffSummary: string };
-type PrototypeComponent = { id: string; type: string; title: string; body: string; label: string; action: { type: string; target: string } | null };
-type MakerArtifact = { selectedOpportunityId: string; prototypeName: string; testableAssumption: string; screens: { id: string; name: string; purpose: string; components: PrototypeComponent[] }[]; limitations: string[] };
-type CommunicatorArtifact = { internalPitch: { headline: string; problem: string; evidence: string; proposedConcept: string; risk: string; requestedDecision: string }; customerInvitation: { status: string; subject: string; body: string }; nextEngagementAction: string; intendedLearning: string };
-type ManagerArtifact = { ranking: { rank: number; opportunityId: string; title: string; evidenceIssueNumbers: number[]; confidence: string; effortRisk: string; rationale: string }[]; finalAction: "build" | "validate" | "park"; finalRecommendation: string; immediateNextStep: string; successMeasure: string; accountableHumanRole: string; finalDisclosure: string };
+type BacklogIssue = { number: number; title: string; state: string; labels: string[]; updatedAt: string; sourceUrl: string; body: string };
+type Gap = { category: string; missingInformation: string; whyItMatters: string; questionForProductManager: string; sourceAgents?: string[] };
+type ResearcherArtifact = { featureRequest: { issueNumber: number; title: string; sourceUrl: string; summary: string }; requestAssessment: { completeness: "low" | "medium" | "high"; confidenceRationale: string; knownFacts: string[]; missingInformation: Gap[] }; problemFrame: { primaryUser: string; problemStatement: string; desiredOutcome: string }; handoffSummary: string };
+type Concept = { id: string; lens: "focused" | "integrated" | "exploratory"; title: string; oneLineSummary: string; intendedUser: string; baselineSurface: string; currentWorkflowReference: string; evidenceFit: string; assumptions: string[]; tradeoffs: string[]; risks: string[] };
+type DesignerArtifact = { concepts: Concept[]; conceptDistinctness: string; informationGaps: Gap[]; handoffSummary: string };
+type MakerArtifact = { prototypes: InteractivePrototype[]; informationGaps: Gap[] };
+type OptionBrief = { conceptId: string; headline: string; executiveSummary: string; intendedUser: string; valueProposition: string; strengths: string[]; risks: string[]; prototypeExplanation: string };
+type CommunicatorArtifact = { optionBriefs: OptionBrief[]; comparisonSummary: string; informationGaps: Gap[] };
+type Ranking = { rank: number; conceptId: string; title: string; lens: string; confidence: string; complexity: string; executiveSummary: string; agentContributions: { researcher: string; designer: string; maker: string; communicator: string } };
+type ManagerArtifact = { requestReadiness: "ready_for_concept_validation" | "needs_backlog_enrichment"; informationQualitySummary: string; consolidatedInformationGaps: Gap[]; ranking: Ranking[]; recommendedConceptId: string; recommendation: string; recommendationStrength: string; whatWouldChangeRecommendation: string[]; accountableHumanRole: string; suggestedNextStep: string; finalDisclosure: string };
 type Artifacts = { researcher?: ResearcherArtifact; designer?: DesignerArtifact; maker?: MakerArtifact; communicator?: CommunicatorArtifact; manager?: ManagerArtifact };
 
 const initialStatuses: Record<StageKey, StageStatus> = { researcher: "idle", designer: "idle", maker: "idle", communicator: "idle", manager: "idle" };
-const feedbackRepository = "https://github.com/kmccarthy-hub/evidenceloop-feedback";
+const lensCopy = { focused: "Smallest credible intervention", integrated: "Connected operational workflow", exploratory: "Ambitious, higher-uncertainty direction" };
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || window.location.origin).replace(/\/$/, "");
+const formatGapCategory = (category: string) => category.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 
 export default function Home() {
-  const [activeStage, setActiveStage] = useState(0);
+  const [workspaceView, setWorkspaceView] = useState<"studio" | "platform">("studio");
+  const [backlog, setBacklog] = useState<BacklogIssue[]>([]);
+  const [backlogState, setBacklogState] = useState<"loading" | "ready" | "error" | "preview">(API_BASE_URL ? "loading" : "preview");
+  const [backlogError, setBacklogError] = useState("");
+  const [selectedNumber, setSelectedNumber] = useState<number | null>(null);
   const [statuses, setStatuses] = useState(initialStatuses);
+  const [activeStage, setActiveStage] = useState(0);
   const [artifacts, setArtifacts] = useState<Artifacts>({});
+  const [toolReceipt, setToolReceipt] = useState<{ completedAt: string; responseStatus: number; selectedIssueNumber: number; backlogIssueCount: number; returnedCommentCount: number } | null>(null);
   const [runError, setRunError] = useState("");
-  const [previewNotice, setPreviewNotice] = useState(false);
-  const [toolReceipt, setToolReceipt] = useState<{ completedAt: string; returnedIssueCount: number; responseStatus: number; id: string } | null>(null);
-  const [prototypeScreenId, setPrototypeScreenId] = useState("");
-  const [selectedComponentId, setSelectedComponentId] = useState("");
-
-  const stage = stages[activeStage];
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "";
+  const [prototypeId, setPrototypeId] = useState("");
+  const apiBaseUrl = API_BASE_URL;
+  const selectedIssue = backlog.find((issue) => issue.number === selectedNumber);
   const runActive = Object.values(statuses).includes("running");
 
-  function setStageStatus(key: StageKey, value: StageStatus) {
-    setStatuses((current) => ({ ...current, [key]: value }));
-  }
+  useEffect(() => {
+    if (!apiBaseUrl) return;
+    let cancelled = false;
+    fetch(`${apiBaseUrl}/api/backlog`, { cache: "no-store" })
+      .then(async (response) => { const payload = await response.json(); if (!response.ok) throw new Error(payload.error ?? "The live backlog could not be loaded."); return payload; })
+      .then((payload) => { if (!cancelled) { setBacklog(payload.issues); setSelectedNumber(payload.issues[0]?.number ?? null); setBacklogState("ready"); } })
+      .catch((error) => { if (!cancelled) { setBacklogState("error"); setBacklogError(error instanceof Error ? error.message : "The live backlog could not be loaded."); } });
+    return () => { cancelled = true; };
+  }, [apiBaseUrl]);
+
+  function setStageStatus(key: StageKey, status: StageStatus) { setStatuses((current) => ({ ...current, [key]: status })); }
 
   async function postStage(key: StageKey, body: object) {
     const response = await fetch(`${apiBaseUrl}/api/${key}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error ?? `${stages.find((item) => item.key === key)?.role} could not complete.`);
+    if (!response.ok) throw new Error(payload.error ?? `${key} could not complete.`);
     return payload;
   }
 
-  async function startAnalysis() {
-    if (!apiBaseUrl) { setPreviewNotice(true); return; }
-    setPreviewNotice(false); setRunError(""); setToolReceipt(null); setArtifacts({}); setStatuses(initialStatuses); setPrototypeScreenId(""); setSelectedComponentId("");
+  async function exploreSolutions() {
+    if (!apiBaseUrl || !selectedNumber) return;
+    setRunError(""); setArtifacts({}); setStatuses(initialStatuses); setToolReceipt(null); setPrototypeId("");
     let currentStage: StageKey = "researcher";
     try {
       setActiveStage(0); setStageStatus("researcher", "running");
-      const research = await postStage("researcher", { trigger: "analyse-current-feedback" });
-      const nextArtifacts: Artifacts = { researcher: research.artifact };
-      setArtifacts(nextArtifacts); setToolReceipt(research.toolReceipt); setStageStatus("researcher", "complete");
-
-      const downstream: StageKey[] = ["designer", "maker", "communicator", "manager"];
-      for (const key of downstream) {
-        currentStage = key;
-        const index = stages.findIndex((item) => item.key === key);
-        setActiveStage(index); setStageStatus(key, "running");
-        const result = await postStage(key, { runId: research.runId, artifacts: nextArtifacts });
-        nextArtifacts[key] = result.artifact;
-        setArtifacts({ ...nextArtifacts }); setStageStatus(key, "complete");
-        if (key === "maker") setPrototypeScreenId(result.artifact.screens[0].id);
+      const research = await postStage("researcher", { featureRequestNumber: selectedNumber });
+      const next: Artifacts = { researcher: research.artifact };
+      setArtifacts(next); setToolReceipt(research.toolReceipt); setStageStatus("researcher", "complete");
+      for (const key of ["designer", "maker", "communicator", "manager"] as StageKey[]) {
+        currentStage = key; setActiveStage(stages.findIndex((item) => item.key === key)); setStageStatus(key, "running");
+        const result = await postStage(key, { runId: research.runId, artifacts: next });
+        next[key] = result.artifact; setArtifacts({ ...next }); setStageStatus(key, "complete");
+        if (key === "maker") setPrototypeId(result.artifact.prototypes[0].conceptId);
       }
     } catch (error) {
-      setStageStatus(currentStage, "error");
-      setRunError(error instanceof Error ? error.message : "The agent pipeline stopped unexpectedly.");
+      setStageStatus(currentStage, "error"); setRunError(error instanceof Error ? error.message : "The agent chain stopped unexpectedly.");
     }
   }
 
-  function handlePrototypeAction(component: PrototypeComponent) {
-    if (!component.action || !artifacts.maker) return;
-    const targetScreen = artifacts.maker.screens.find((screen) => screen.id === component.action?.target);
-    if (targetScreen) { setPrototypeScreenId(targetScreen.id); setSelectedComponentId(""); }
-    else setSelectedComponentId(component.id === selectedComponentId ? "" : component.id);
-  }
+  const currentPrototype = artifacts.maker?.prototypes.find((item) => item.conceptId === prototypeId) ?? artifacts.maker?.prototypes[0];
+  const recommended = artifacts.manager?.ranking.find((item) => item.conceptId === artifacts.manager?.recommendedConceptId);
 
-  const currentPrototypeScreen = artifacts.maker?.screens.find((screen) => screen.id === prototypeScreenId) ?? artifacts.maker?.screens[0];
+  return <main className="app-shell bsm-shell">
+    <div className="ambient ambient-one" /><div className="ambient ambient-two" />
+    <header className="topbar">
+      <a className="brand" href="#top" aria-label="BottleShopManager Solution Studio home"><span className="bsm-mark" aria-hidden="true"><i /><i /><i /></span><span>BottleShopManager</span><span className="product-name">Solution Studio</span></a>
+      <div className="topbar-meta"><div className="workspace-switch" aria-label="Choose BottleShopManager workspace"><button type="button" className={workspaceView === "platform" ? "active" : ""} onClick={() => setWorkspaceView("platform")}>Current platform</button><button type="button" className={workspaceView === "studio" ? "active" : ""} onClick={() => setWorkspaceView("studio")}>Solution Studio</button></div><span className="disclosure-pill"><span className="spark">✦</span>AI-assisted exploration</span><span className="synthetic-pill">Synthetic academic backlog</span></div>
+    </header>
 
-  return (
-    <main className="app-shell">
-      <div className="ambient ambient-one" /><div className="ambient ambient-two" />
-      <header className="topbar">
-        <a className="brand" href="#top" aria-label="EvidenceLoop home"><span className="brand-mark" aria-hidden="true"><i /><i /><i /></span><span>EvidenceLoop</span><span className="product-name">Opportunity Lens</span></a>
-        <div className="topbar-meta"><span className="disclosure-pill"><span className="spark">✦</span>AI-assisted decision support</span><span className="synthetic-pill">Synthetic academic data</span><a className="text-link" href="#how-it-works">How it works</a></div>
-      </header>
+    {workspaceView === "platform" ? <BottleShopPlatform onOpenStudio={() => setWorkspaceView("studio")} /> : <>
+    <section className="studio-hero" id="top">
+      <div className="studio-copy"><p className="eyebrow"><span /> Internal product concept studio</p><h1>Explore a backlog request from <em>three angles</em> before committing.</h1><p className="hero-lede">Select one live BottleShopManager feature request. Five specialised AI agents investigate its quality, build three solution concepts and provide one advisory recommendation—while the Product Manager keeps the decision.</p><div className="studio-principles"><span>Live GitHub backlog</span><span>Three comparable prototypes</span><span>Information gaps made visible</span></div></div>
 
-      <section className="hero" id="top">
-        <div className="hero-copy">
-          <p className="eyebrow"><span /> Product opportunity intelligence</p>
-          <h1>Turn customer feedback into a decision your team can <em>defend.</em></h1>
-          <p className="hero-lede">Five specialised AI agents transform live customer evidence into three ranked opportunities, one clickable concept and a recommendation that stays under human control.</p>
-          <div className="hero-actions">
-            <button className="primary-button" type="button" onClick={startAnalysis} disabled={runActive}>{runActive ? `${stage.role} is working…` : artifacts.manager ? "Run a fresh analysis" : "Analyse current feedback"}<span aria-hidden="true">→</span></button>
-            <div className="run-note"><span className="live-dot" />Researcher queries GitHub at run time</div>
-          </div>
-          {previewNotice && <div className="preview-notice" role="status"><strong>Interface preview:</strong> connect the deployed Vercel API before running. No result on this page is represented as live.<button type="button" onClick={() => setPreviewNotice(false)} aria-label="Dismiss preview notice">×</button></div>}
-          {runError && <div className="run-error" role="alert"><strong>Pipeline stopped at {stage.role}:</strong> {runError}</div>}
-        </div>
+      <aside className="request-selector" aria-label="Select a live backlog request">
+        <div className="selector-head"><div><span className="card-kicker">Live BottleShopManager backlog</span><h2>Choose a feature request</h2></div><span className={`source-state source-${backlogState}`}>{backlogState === "ready" ? `${backlog.length} live requests` : backlogState}</span></div>
+        {backlogState === "ready" && <><label htmlFor="feature-request">Feature request</label><select id="feature-request" value={selectedNumber ?? ""} onChange={(event) => setSelectedNumber(Number(event.target.value))} disabled={runActive}>{backlog.map((issue) => <option key={issue.number} value={issue.number}>#{issue.number} · {issue.title}</option>)}</select></>}
+        {backlogState === "loading" && <div className="selector-message">Connecting to the current GitHub backlog…</div>}
+        {backlogState === "preview" && <div className="selector-message"><strong>Interface preview</strong><br />Connect the deployed API to load the live backlog. No request has been hardcoded.</div>}
+        {backlogState === "error" && <div className="selector-message error"><strong>Backlog unavailable</strong><br />{backlogError}</div>}
+        {selectedIssue && <div className="selected-request"><div><span>Selected live issue</span><strong>#{selectedIssue.number} · {selectedIssue.title}</strong></div><a href={selectedIssue.sourceUrl} target="_blank" rel="noreferrer">View source ↗</a><p>{selectedIssue.body.replace(/[*#>]/g, " ").replace(/\s+/g, " ").slice(0, 250)}…</p></div>}
+        <button className="primary-button studio-button" type="button" onClick={exploreSolutions} disabled={runActive || backlogState !== "ready" || !selectedNumber}>{runActive ? `${stages[activeStage].role} is working…` : artifacts.manager ? "Run this request again" : "Explore three solutions"}<span aria-hidden="true">→</span></button>
+        <p className="decision-note">No feature, roadmap or investment decision is written back.</p>
+        {runError && <div className="run-error" role="alert"><strong>Pipeline stopped at {stages[activeStage].role}:</strong> {runError}</div>}
+      </aside>
+    </section>
 
-        <div className="signal-card" aria-label="Live tool call receipt">
-          <div className="signal-card-head"><div><span className="card-kicker">Researcher tool</span><h2>Live source receipt</h2></div><span className="ai-chip">AI requested</span></div>
-          <div className="tool-line"><span className="terminal-prompt">›</span><code>fetch_customer_feedback</code><span className={`waiting-chip ${toolReceipt ? "completed" : ""}`}>{statuses.researcher === "running" ? "Calling…" : toolReceipt ? "Completed" : statuses.researcher === "error" ? "Stopped" : "Not run"}</span></div>
-          <div className="receipt-grid">
-            <div><span>Source</span><strong>GitHub Issues API</strong></div><div><span>Query time</span><strong>{toolReceipt ? new Date(toolReceipt.completedAt).toLocaleString("en-IE") : "Waiting for run"}</strong></div>
-            <div><span>Feedback received</span><strong>{toolReceipt ? `${toolReceipt.returnedIssueCount} live issues` : "—"}</strong></div><div><span>Validation</span><strong>{toolReceipt ? `Verified · HTTP ${toolReceipt.responseStatus}` : "Not started"}</strong></div>
-          </div>
-          <div className="source-rule"><span className="source-icon">↗</span><p>The Researcher requests the tool. The application executes the live API call and records a deterministic receipt. No cached feedback fallback is used.</p></div>
-        </div>
-      </section>
+    <section className="pipeline-section" id="pipeline">
+      <div className="section-heading"><div><p className="eyebrow"><span /> Cumulative handoffs</p><h2>Five viewpoints. One traceable recommendation.</h2></div><p>Every agent receives all validated work produced before it. Missing information accumulates instead of disappearing between stages.</p></div>
+      <div className="studio-pipeline">
+        {stages.map((item, index) => <button key={item.key} type="button" className={`pipeline-node ${index === activeStage ? "active" : ""}`} onClick={() => setActiveStage(index)} aria-pressed={index === activeStage}><span className={`stage-orb ${item.accent}`}>{item.number}</span><span><strong>{item.role}</strong><small>{item.name}</small></span><span className={`stage-status status-${statuses[item.key]}`}>{statuses[item.key]}</span><p>{item.output}</p></button>)}
+      </div>
+      <div className="pipeline-boundary"><div><strong>{stages[activeStage].role}</strong><span>AI-generated · verify before use</span></div><p>{activeStage === 4 ? "Provides an advisory recommendation and backlog-improvement questions. The Product Manager retains the final decision." : "Cannot approve work, change the backlog or bypass the next evidence handoff."}</p></div>
+    </section>
 
-      <section className="pipeline-section" id="how-it-works">
-        <div className="section-heading"><div><p className="eyebrow"><span /> One cumulative chain</p><h2>Five agents. Five accountable handoffs.</h2></div><p>Each agent receives the validated artefacts produced before it. Select a stage to inspect its role, status and control boundary.</p></div>
-        <div className="pipeline-grid">
-          <nav className="stage-rail" aria-label="Agent pipeline">
-            {stages.map((item, index) => <button key={item.role} type="button" className={`stage-tab ${index === activeStage ? "active" : ""}`} onClick={() => setActiveStage(index)} aria-pressed={index === activeStage}><span className={`stage-orb ${item.accent}`}>{item.number}</span><span className="stage-label"><strong>{item.role}</strong><small>{item.name}</small></span><span className={`ai-mini status-${statuses[item.key]}`}>{statuses[item.key] === "idle" ? "AI" : statuses[item.key]}</span></button>)}
-          </nav>
-          <article className={`stage-detail detail-${stage.accent}`}>
-            <div className="stage-detail-top"><div><span className="card-kicker">Stage {stage.number} · AI agent</span><h3>{stage.role}</h3><p className="agent-name">{stage.name}</p></div><span className="generated-chip">AI-generated · verify before use</span></div>
-            <p className="stage-summary">{stage.summary}</p>
-            <div className="handoff-flow"><div><span>Receives</span><strong>{activeStage === 0 ? "Research task + tool access" : `All artefacts through ${stages[activeStage - 1].role}`}</strong></div><span className="flow-arrow" aria-hidden="true">→</span><div><span>Produces</span><strong>{stage.output}</strong></div></div>
-            <div className="stage-boundary"><span>Control boundary</span><p>{activeStage === 4 ? "Advisory output only. A human product leader approves, rejects or requests more validation." : "This agent cannot publish, approve investment or bypass the next validation gate."}</p></div>
-          </article>
-          <aside className="decision-preview"><span className="card-kicker">Final decision format</span><h3>Evidence before confidence.</h3><ol><li><span>1</span><div><strong>Rank three opportunities</strong><small>With issue-level traceability</small></div></li><li><span>2</span><div><strong>Review the prototype</strong><small>Against the selected problem</small></div></li><li><span>3</span><div><strong>Recommend one action</strong><small>Build, validate or park</small></div></li></ol><div className="human-control"><span className="human-icon" aria-hidden="true">◎</span><div><strong>Human approval required</strong><p>Opportunity Lens informs the roadmap. It never changes it.</p></div></div></aside>
-        </div>
-      </section>
+    {artifacts.researcher && <section className="results-section studio-results" aria-live="polite">
+      <div className="section-heading"><div><p className="eyebrow"><span /> Selected request analysis</p><h2>{artifacts.researcher.featureRequest.title}</h2></div><p>All content below is AI-generated from the selected live GitHub issue and cumulative agent artefacts.</p></div>
 
-      {artifacts.researcher && <section className="results-section" aria-live="polite">
-        <div className="section-heading"><div><p className="eyebrow"><span /> Current run</p><h2>Decision workspace</h2></div><p>Every panel below is AI-generated decision support. Evidence links open the synthetic source record for human verification.</p></div>
-        <div className="opportunity-grid">
-          {artifacts.researcher.opportunities.map((opportunity) => <article className={`opportunity-result ${opportunity.id === artifacts.researcher?.leadOpportunityId ? "lead" : ""}`} key={opportunity.id}><div className="result-label"><span>{opportunity.id === artifacts.researcher?.leadOpportunityId ? "Researcher lead" : "Candidate"}</span><span>{opportunity.confidence} confidence</span></div><h3>{opportunity.title}</h3><p>{opportunity.problemStatement}</p><div className="evidence-links">{opportunity.evidenceIssueNumbers.map((number) => <a key={number} href={`${feedbackRepository}/issues/${number}`} target="_blank" rel="noreferrer">Issue #{number}</a>)}</div></article>)}
-        </div>
+      <div className="research-grid">
+        <article className="request-quality"><div className="panel-heading"><div><span className="card-kicker">Researcher · request readiness</span><h3>{artifacts.researcher.requestAssessment.completeness} information quality</h3></div><span className={`quality-chip quality-${artifacts.researcher.requestAssessment.completeness}`}>{artifacts.researcher.requestAssessment.missingInformation.length} gaps</span></div><p>{artifacts.researcher.requestAssessment.confidenceRationale}</p><dl><div><dt>Primary user</dt><dd>{artifacts.researcher.problemFrame.primaryUser}</dd></div><div><dt>Problem</dt><dd>{artifacts.researcher.problemFrame.problemStatement}</dd></div><div><dt>Desired outcome</dt><dd>{artifacts.researcher.problemFrame.desiredOutcome}</dd></div></dl></article>
+        <aside className="live-receipt"><span className="card-kicker">Agent-requested tool receipt</span><div className="tool-name"><code>fetch_selected_feature_request</code><strong>{toolReceipt ? "Completed" : "Waiting"}</strong></div><div className="receipt-list"><div><span>Selected issue</span><strong>{toolReceipt ? `#${toolReceipt.selectedIssueNumber}` : "—"}</strong></div><div><span>Backlog context</span><strong>{toolReceipt ? `${toolReceipt.backlogIssueCount} live requests` : "—"}</strong></div><div><span>Comments retrieved</span><strong>{toolReceipt?.returnedCommentCount ?? "—"}</strong></div><div><span>GitHub response</span><strong>{toolReceipt ? `HTTP ${toolReceipt.responseStatus}` : "—"}</strong></div><div><span>Query time</span><strong>{toolReceipt ? new Date(toolReceipt.completedAt).toLocaleString("en-IE") : "—"}</strong></div></div></aside>
+      </div>
 
-        {artifacts.designer && <article className="result-panel"><div className="panel-heading"><div><span className="card-kicker">Designer · AI-generated</span><h3>{artifacts.designer.problemStatement}</h3></div><span className="generated-chip">Concept under evaluation</span></div><p>{artifacts.designer.selectionRationale}</p><div className="alternative-row">{artifacts.designer.alternatives.map((alternative) => <div key={alternative.id} className={alternative.id === artifacts.designer?.selectedConceptId ? "selected" : ""}><strong>{alternative.name}</strong><p>{alternative.concept}</p></div>)}</div></article>}
+      {artifacts.designer && <><div className="result-section-title"><span>Designer output</span><h3>Three deliberately different solution directions</h3><p>{artifacts.designer.conceptDistinctness}</p></div><div className="concept-grid">{artifacts.designer.concepts.map((concept) => <article className={`concept-card lens-${concept.lens}`} key={concept.id}><div className="concept-top"><span>{concept.lens}</span><small>{lensCopy[concept.lens]}</small></div><h3>{concept.title}</h3><p>{concept.oneLineSummary}</p><div className="concept-meta"><span>Current product surface</span><strong>{concept.baselineSurface} · {concept.currentWorkflowReference}</strong></div><div className="concept-meta"><span>Evidence fit</span><strong>{concept.evidenceFit}</strong></div><details><summary>Assumptions and trade-offs</summary><ul>{[...concept.assumptions, ...concept.tradeoffs].map((item) => <li key={item}>{item}</li>)}</ul></details></article>)}</div></>}
 
-        {artifacts.maker && currentPrototypeScreen && <article className="result-panel prototype-panel"><div className="panel-heading"><div><span className="card-kicker">Maker · AI-generated prototype</span><h3>{artifacts.maker.prototypeName}</h3><p>{artifacts.maker.testableAssumption}</p></div><span className="generated-chip">Prototype · not production</span></div><div className="prototype-shell"><nav aria-label="Prototype screens">{artifacts.maker.screens.map((screen) => <button type="button" key={screen.id} className={screen.id === currentPrototypeScreen.id ? "active" : ""} onClick={() => { setPrototypeScreenId(screen.id); setSelectedComponentId(""); }}>{screen.name}</button>)}</nav><div className="prototype-canvas"><div className="prototype-top"><span>{currentPrototypeScreen.name}</span><small>{currentPrototypeScreen.purpose}</small></div>{currentPrototypeScreen.components.map((component) => <button type="button" className={`prototype-component component-${component.type} ${component.id === selectedComponentId ? "selected" : ""}`} key={component.id} onClick={() => handlePrototypeAction(component)} disabled={!component.action}><span>{component.type}</span><strong>{component.title || component.label}</strong><p>{component.body}</p>{component.action && <small>{component.label || component.action.type} →</small>}</button>)}</div></div></article>}
+      {artifacts.maker && currentPrototype && <article className="result-panel prototype-panel"><div className="panel-heading"><div><span className="card-kicker">Maker · three AI-generated prototypes</span><h3>Compare current product to proposed workflows</h3></div><span className="generated-chip">Interactive synthetic prototype · not production</span></div><div className="prototype-shell studio-prototype"><nav aria-label="Solution prototypes">{artifacts.maker.prototypes.map((prototype) => { const concept = artifacts.designer?.concepts.find((item) => item.id === prototype.conceptId); return <button type="button" key={prototype.conceptId} className={prototype.conceptId === currentPrototype.conceptId ? "active" : ""} onClick={() => setPrototypeId(prototype.conceptId)}><span>{concept?.lens}</span>{prototype.title}</button>; })}</nav><div className="prototype-intro"><div><span className="card-kicker">Assumption under test</span><h4>{currentPrototype.title}</h4><p>{currentPrototype.testableAssumption}</p></div><p>{currentPrototype.purpose}</p></div><PrototypeRenderer key={currentPrototype.conceptId} prototype={currentPrototype} lens={artifacts.designer?.concepts.find((item) => item.id === currentPrototype.conceptId)?.lens ?? "concept"} /><div className="prototype-limit"><strong>What this does not prove</strong><p>{currentPrototype.limitations.join(" · ")}</p></div></div></article>}
 
-        {artifacts.communicator && <article className="result-panel communication-panel"><div className="panel-heading"><div><span className="card-kicker">Communicator · AI draft</span><h3>{artifacts.communicator.internalPitch.headline}</h3></div><span className="draft-chip">Draft · not sent</span></div><div className="communication-grid"><div><span>Internal decision request</span><p>{artifacts.communicator.internalPitch.requestedDecision}</p><strong>Risk</strong><p>{artifacts.communicator.internalPitch.risk}</p></div><div><span>Customer validation invitation</span><strong>{artifacts.communicator.customerInvitation.subject}</strong><p>{artifacts.communicator.customerInvitation.body}</p></div></div></article>}
+      {artifacts.communicator && <article className="result-panel"><div className="panel-heading"><div><span className="card-kicker">Communicator · internal AI draft</span><h3>Decision briefs, not launch promises</h3></div><span className="draft-chip">Draft · internal only</span></div><p>{artifacts.communicator.comparisonSummary}</p><div className="brief-grid">{artifacts.communicator.optionBriefs.map((brief) => <div key={brief.conceptId}><span>{artifacts.designer?.concepts.find((item) => item.id === brief.conceptId)?.lens}</span><strong>{brief.headline}</strong><p>{brief.executiveSummary}</p></div>)}</div></article>}
 
-        {artifacts.manager && <article className="result-panel manager-panel"><div className="panel-heading"><div><span className="card-kicker">Manager · advisory AI output</span><h3>Final recommendation: {artifacts.manager.finalAction}</h3></div><span className="human-chip">Human approval required</span></div><p className="manager-recommendation">{artifacts.manager.finalRecommendation}</p><div className="ranking-table">{artifacts.manager.ranking.map((item) => <div key={item.opportunityId}><span className="rank-number">{item.rank}</span><div><strong>{item.title}</strong><p>{item.rationale}</p></div><span>{item.confidence}<small>confidence</small></span><span>{item.effortRisk}<small>effort / risk</small></span></div>)}</div><div className="manager-next"><div><span>Accountable human</span><strong>{artifacts.manager.accountableHumanRole}</strong></div><div><span>Immediate next step</span><strong>{artifacts.manager.immediateNextStep}</strong></div><div><span>Success measure</span><strong>{artifacts.manager.successMeasure}</strong></div></div><p className="final-disclosure">{artifacts.manager.finalDisclosure}</p></article>}
-      </section>}
+      {artifacts.manager && <article className="result-panel manager-panel"><div className="panel-heading"><div><span className="card-kicker">Manager · advisory AI recommendation</span><h3>{artifacts.manager.requestReadiness === "needs_backlog_enrichment" ? "Improve the request before relying on the concepts" : `Recommended direction: ${recommended?.title}`}</h3></div><span className="human-chip">Product Manager decides</span></div><p className="manager-recommendation">{artifacts.manager.recommendation}</p><div className="ranking-table studio-ranking">{artifacts.manager.ranking.map((item) => <details key={item.conceptId} open={item.rank === 1}><summary><span className="rank-number">{item.rank}</span><div><strong>{item.title}</strong><small>{item.lens} · {item.confidence} confidence · {item.complexity}</small></div><span>{item.rank === 1 ? `${artifacts.manager?.recommendationStrength} recommendation` : "View executive summary"}</span></summary><p>{item.executiveSummary}</p><div className="contribution-grid"><div><span>Researcher</span><p>{item.agentContributions.researcher}</p></div><div><span>Designer</span><p>{item.agentContributions.designer}</p></div><div><span>Maker</span><p>{item.agentContributions.maker}</p></div><div><span>Communicator</span><p>{item.agentContributions.communicator}</p></div></div></details>)}</div><div className="manager-next"><div><span>Accountable human</span><strong>{artifacts.manager.accountableHumanRole}</strong></div><div><span>Suggested next step</span><strong>{artifacts.manager.suggestedNextStep}</strong></div><div><span>Decision boundary</span><strong>No selection or backlog change is made here.</strong></div></div><p className="final-disclosure">{artifacts.manager.finalDisclosure}</p></article>}
 
-      <footer><span>EvidenceLoop · Opportunity Lens</span><span>Fictional organisation · Academic prototype · 2026</span><span>Desktop experience</span></footer>
-    </main>
-  );
+      {artifacts.manager && <article className="gap-panel"><div className="panel-heading"><div><span className="card-kicker">Cumulative information-gap tracker</span><h3>{artifacts.manager.requestReadiness === "needs_backlog_enrichment" ? "Improve the backlog request, then run it again." : "Questions to carry into concept validation."}</h3></div><span className="gap-count">{artifacts.manager.consolidatedInformationGaps.length} questions</span></div><p>{artifacts.manager.informationQualitySummary}</p>{artifacts.manager.consolidatedInformationGaps.length ? <div className="gap-list">{artifacts.manager.consolidatedInformationGaps.map((gap, index) => <div key={`${gap.category}-${index}`}><span>{formatGapCategory(gap.category)}</span><div><strong>{gap.questionForProductManager}</strong><p>{gap.whyItMatters}</p><small>Raised by: {gap.sourceAgents?.map(formatGapCategory).join(", ")}</small></div></div>)}</div> : <div className="no-gaps">No critical information gaps remained in this run. Validate the assumptions with real users before commitment.</div>}</article>}
+    </section>}
+    </>}
+
+    <footer><span>BottleShopManager · Solution Studio</span><span>Fictional Irish B2B retail platform · Synthetic academic prototype</span><span>AI advises · Product Manager decides</span></footer>
+  </main>;
 }
