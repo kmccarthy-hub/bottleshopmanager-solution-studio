@@ -165,7 +165,8 @@ export function validateDownstreamArtifact(stage, artifact, runId, inputs) {
     const prototypeIds = ids(artifact.prototypes, "conceptId");
     if (prototypeIds.length !== 1 || prototypeIds[0] !== inputs.prototypeSelection?.selectedConceptId || prototypeIds.some((id) => !conceptIds.includes(id))) throw new Error("The Maker must create exactly one prototype for the Manager-selected Designer specification.");
     const baselines = getPrototypeBaselinePackage(concepts);
-    const forbiddenPrototypeCode = /<\s*(?:a|iframe|object|embed|base|form|script|style|link|meta)\b|\bon\w+\s*=|\b(?:fetch|XMLHttpRequest|WebSocket|EventSource|sendBeacon|localStorage|sessionStorage|indexedDB|serviceWorker|window\.open|document\.cookie|window\.parent|window\.top|window\.opener|eval\s*\(|Function\s*\(|(?:window\.|document\.)?location\s*[.=])|https?:\/\/|javascript:/i;
+    const forbiddenPrototypeRuntime = /<\s*(?:a|iframe|object|embed|base|form|script|style|link|meta)\b|\b(?:fetch|XMLHttpRequest|WebSocket|EventSource|sendBeacon|localStorage|sessionStorage|indexedDB|serviceWorker|window\.open|document\.cookie|window\.parent|window\.top|window\.opener|eval\s*\(|Function\s*\(|(?:window\.|document\.)?location\s*[.=])|https?:\/\/|mailto:|javascript:/i;
+    const forbiddenPrototypeMarkup = new RegExp(`${forbiddenPrototypeRuntime.source}|(?<![\\w-])(?:href|src|action|formaction|target)\\s*=|\\bon\\w+\\s*=`, "i");
     const broadPrototypeCss = /(^|[},])\s*(?:html|body|\*|:root|\.platform-|\.bsm-page|\.module-header|\.current-workflow|\[data-baseline)[^{,]*\{/im;
     for (const prototype of artifact.prototypes) {
       const concept = concepts.find((item) => item.id === prototype.conceptId);
@@ -178,11 +179,13 @@ export function validateDownstreamArtifact(stage, artifact, runId, inputs) {
       for (const modification of prototype.modifications) {
         if (!baseline.anchors.includes(modification.targetAnchor)) throw new Error(`The Maker targeted an unknown baseline anchor: ${modification.targetAnchor}.`);
         if (modification.html?.length < 80 || modification.html.length > 8000 || !modification.html.includes(`data-prototype-element="${modification.id}"`)) throw new Error("Every Maker modification must provide a bounded HTML fragment marked with its matching data-prototype-element ID.");
-        if (forbiddenPrototypeCode.test(modification.html)) throw new Error("Generated prototype markup requested a prohibited capability or inline executable content.");
+        const blockedMarkup = modification.html.match(forbiddenPrototypeMarkup)?.[0];
+        if (blockedMarkup) throw new Error(`Generated prototype markup contains blocked token ${JSON.stringify(blockedMarkup.slice(0, 48))}. Use non-submitting controls in html, prototypeCss for styling and prototypeScript for behaviour.`);
       }
       const generatedCode = `${prototype.prototypeCss ?? ""}\n${prototype.prototypeScript ?? ""}`;
       if (prototype.prototypeCss?.length < 80 || prototype.prototypeCss.length > 12000 || broadPrototypeCss.test(prototype.prototypeCss)) throw new Error("Maker CSS must be bounded and scoped only to generated prototype elements.");
-      if (prototype.prototypeScript?.length < 80 || prototype.prototypeScript.length > 10000 || forbiddenPrototypeCode.test(generatedCode)) throw new Error("Maker interactions must be bounded and cannot request network, storage, navigation, embedding or parent-page capabilities.");
+      const blockedGeneratedCode = generatedCode.match(forbiddenPrototypeRuntime)?.[0];
+      if (prototype.prototypeScript?.length < 80 || prototype.prototypeScript.length > 10000 || blockedGeneratedCode) throw new Error(`Maker interactions must be bounded and cannot request network, storage, navigation, embedding or parent-page capabilities.${blockedGeneratedCode ? ` Blocked token: ${JSON.stringify(blockedGeneratedCode.slice(0, 48))}.` : ""}`);
       if (!prototype.modifications.some((item) => /<button\b/i.test(item.html)) || !/data-prototype-element|\.prototype-/i.test(prototype.prototypeScript)) throw new Error("Every generated page modification must include feature-specific controls and scoped interactive behaviour.");
       if (prototype.baselineAnchorsPreserved?.length < 2 || prototype.baselineAnchorsPreserved.some((anchor) => !baseline.anchors.includes(anchor))) throw new Error("Every generated page must acknowledge at least two verified elements from the relevant current-platform page.");
     }

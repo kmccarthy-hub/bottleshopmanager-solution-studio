@@ -21,7 +21,7 @@ CUSTOM PROTOTYPE REQUIREMENTS
 - Return 1-6 targeted modifications. Each modification supplies a unique id, a verified targetAnchor, placement, purpose and an HTML fragment marked with data-prototype-element equal to that id.
 - Return scoped prototypeCss and prototypeScript separately. The renderer applies them only to its disposable page copy.
 - Add the proposed feature in context. Do not output a generic card list, slideshow or prose specification.
-- Make interactions specific to the feature: menus, forms, filters, calendars, drawers, modals, tables, inline actions, confirmations, disabled states or other controls as required by the Designer.
+- Make interactions specific to the feature: menus, non-submitting field groups, filters, calendars, drawers, modals, tables, inline actions, confirmations, disabled states or other controls as required by the Designer.
 - Provide at least two observable states. The surrounding renderer provides the Reset generated prototype control.
 - Use the supplied BottleShopManager design tokens and desktop dimensions. No mobile work is required.
 - Use only clearly synthetic example data. Preserve existing baseline values where useful; label new records "Example".
@@ -31,6 +31,9 @@ SCOPING RULES
 - Every CSS selector must begin with [data-prototype-element] or .prototype-. Never style html, body, the platform shell, sidebar, baseline anchors or existing baseline classes.
 - JavaScript may query and update only elements inside [data-prototype-element]. Use data-action and data-state attributes where practical.
 - Do not duplicate platform navigation, the module heading, existing tables or the current-workflow panel. The renderer already has them.
+- HTML fragments may use section, div, header, table, fieldset, label, input, select, textarea and button elements. Use type="button" on every button.
+- Do not use a, form, script, style, link, meta, iframe, object, embed or base elements. Do not use href, src, action, formaction or inline on-event attributes. Put all styling in prototypeCss and all behaviour in prototypeScript.
+- Simulate integrations such as email, export or navigation as visible in-prototype states. Never use mailto links, live URLs or actual submission controls.
 
 STRICT SANDBOX RULES
 Generated fragments are untrusted prototypes. Use no external URLs, assets, imports, frames, forms, network requests, browser storage, cookies, downloads, navigation, popups, parent/top/opener access, dynamic code evaluation or service workers. Use no script src, fetch, XMLHttpRequest, WebSocket, EventSource, sendBeacon, localStorage, sessionStorage, indexedDB, eval or Function. Simple JavaScript may only update generated prototype elements in the disposable document.
