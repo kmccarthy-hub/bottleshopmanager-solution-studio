@@ -6,6 +6,9 @@ import { getPrototypeBaselinePackage } from "../domain/prototype-baselines.js";
 
 assert.equal(serviceStatus(new Error('{"error":{"code":503,"status":"UNAVAILABLE"}}')), 503);
 assert.equal(isTransientServiceError(new Error("This model is currently experiencing high demand.")), true);
+assert.equal(isTransientServiceError(new Error("Every generated page must provide a complete standalone document.")), false);
+assert.equal(isTransientServiceError(new Error("Artifact validation failed: prohibited prototype capability.")), false);
+assert.equal(isTransientServiceError({ status: 503, message: "Provider unavailable" }), true);
 
 const selectedIssue = { number: 4, sourceUrl: "https://github.com/kmccarthy-hub/bottleshopmanager-backlog/issues/4" };
 const researcher = {

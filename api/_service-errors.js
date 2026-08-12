@@ -18,7 +18,11 @@ export function serviceStatus(error) {
 
 export function isTransientServiceError(error) {
   const message = errorMessage(error);
-  return transientCodes.has(serviceStatus(error)) && !/validation|schema|invalid json|unexpected token/i.test(message);
+  if (/validation|schema|invalid json|unexpected token|must preserve|must provide|must create|must identify|must assess|must select|must rank|prohibited|invented|did not preserve|did not return/i.test(message)) return false;
+  const directCode = Number(error?.status ?? error?.code ?? error?.error?.code);
+  if (Number.isInteger(directCode)) return transientCodes.has(directCode);
+  if (/(?:(?:"code"\s*:\s*)|\b)(429|500|502|503|504)\b/.test(message)) return true;
+  return /RESOURCE_EXHAUSTED|UNAVAILABLE|high demand|temporar(?:y|ily unavailable)|rate limit|FUNCTION_INVOCATION_TIMEOUT|timed?\s*out|ECONNRESET|ETIMEDOUT/i.test(message);
 }
 
 export function sendStageError(response, stage, runId, error) {

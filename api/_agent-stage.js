@@ -70,7 +70,11 @@ export function createAgentHandler(stage) {
             },
           });
           const artifact = JSON.parse(result.text);
-          validateDownstreamArtifact(stage, artifact, runId, artifacts);
+          try {
+            validateDownstreamArtifact(stage, artifact, runId, artifacts);
+          } catch (validationError) {
+            throw new Error(`Artifact validation failed: ${validationError instanceof Error ? validationError.message : "invalid structured output"}`);
+          }
           return response.status(200).json({ runId, stage, validationAttempts: attempt, aiDisclosure: "AI-generated analysis - verify before use", artifact });
         } catch (error) {
           if (isTransientServiceError(error)) throw error;

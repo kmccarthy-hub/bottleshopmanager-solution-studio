@@ -75,7 +75,8 @@ export default function Home() {
         const response = await fetch(`${apiBaseUrl}/api/${key}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
         const payload = await response.json().catch(() => ({ error: `${key} returned an unreadable response.`, retryable: [502, 503, 504].includes(response.status) }));
         if (response.ok) { setRetryNotice(""); return payload; }
-        if (!payload.retryable || attempt === retryDelays.length - 1) { setRetryNotice(""); throw new Error(payload.error ?? `${key} could not complete.`); }
+        if (!payload.retryable) { setRetryNotice(""); throw new Error(payload.error ?? `${key} could not complete.`); }
+        if (attempt === retryDelays.length - 1) { setRetryNotice(""); throw new Error(`${roleLabel} could not reach the AI service after ${retryDelays.length} attempts. Please wait a few minutes and run the request again.`); }
       } catch (error) {
         if (error instanceof TypeError && attempt < retryDelays.length - 1) {
           setRetryNotice(`${roleLabel} request was interrupted before a response was readable. Retrying this stage automatically…`);
