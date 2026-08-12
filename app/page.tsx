@@ -59,16 +59,26 @@ export default function Home() {
   function setStageStatus(key: StageKey, status: StageStatus) { setStatuses((current) => ({ ...current, [key]: status })); }
 
   async function postStage(key: StageKey, body: object) {
-    const retryDelays = [0, 4000, 9000];
+    const retryDelays = [0, 5000, 12000, 20000];
     for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
       if (retryDelays[attempt]) {
         setRetryNotice(`${stages.find((stage) => stage.key === key)?.role} AI service is busy. Automatic retry ${attempt} of ${retryDelays.length - 1}…`);
         await new Promise((resolve) => window.setTimeout(resolve, retryDelays[attempt]));
       }
-      const response = await fetch(`${apiBaseUrl}/api/${key}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      const payload = await response.json().catch(() => ({ error: `${key} returned an unreadable response.` }));
-      if (response.ok) { setRetryNotice(""); return payload; }
-      if (!payload.retryable || attempt === retryDelays.length - 1) { setRetryNotice(""); throw new Error(payload.error ?? `${key} could not complete.`); }
+      try {
+        const response = await fetch(`${apiBaseUrl}/api/${key}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+        const payload = await response.json().catch(() => ({ error: `${key} returned an unreadable response.`, retryable: [502, 503, 504].includes(response.status) }));
+        if (response.ok) { setRetryNotice(""); return payload; }
+        if (!payload.retryable || attempt === retryDelays.length - 1) { setRetryNotice(""); throw new Error(payload.error ?? `${key} could not complete.`); }
+      } catch (error) {
+        if (error instanceof TypeError && attempt < retryDelays.length - 1) {
+          setRetryNotice(`${stages.find((stage) => stage.key === key)?.role} request was interrupted before a response was readable. Retrying this stage automatically…`);
+          continue;
+        }
+        setRetryNotice("");
+        if (error instanceof TypeError) throw new Error("The AI service remained unavailable after automatic retries. Please wait a few minutes and start a new run.");
+        throw error;
+      }
     }
     throw new Error(`${key} could not complete after automatic retries.`);
   }

@@ -6,6 +6,7 @@ import { isTransientServiceError, serviceStatus } from "../api/_service-errors.j
 assert.equal(serviceStatus(new Error('{"error":{"code":503,"status":"UNAVAILABLE"}}')), 503);
 assert.equal(isTransientServiceError(new Error("This model is currently experiencing high demand.")), true);
 assert.equal(isTransientServiceError(new Error("The Maker artefact failed schema validation.")), false);
+assert.equal([502, 503, 504].includes(504), true);
 
 const selectedIssue = { number: 4, sourceUrl: "https://github.com/kmccarthy-hub/bottleshopmanager-backlog/issues/4" };
 const researcher = {
