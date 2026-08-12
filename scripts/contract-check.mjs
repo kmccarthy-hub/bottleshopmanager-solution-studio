@@ -5,6 +5,7 @@ import { isTransientServiceError, serviceStatus } from "../api/_service-errors.j
 import { stageRepairGuidance } from "../api/_stage-repair.js";
 import { getPrototypeBaselinePackage } from "../domain/prototype-baselines.js";
 import { extractMarketResearch } from "../api/researcher.js";
+import { sortIssuesByNumber } from "../api/_github-backlog.js";
 
 assert.equal(serviceStatus(new Error('{"error":{"code":503,"status":"UNAVAILABLE"}}')), 503);
 assert.equal(isTransientServiceError(new Error("This model is currently experiencing high demand.")), true);
@@ -24,6 +25,7 @@ assert.equal(groundedResearch.receipt.sourceCount, 1);
 assert.equal(groundedResearch.receipt.searchCallCount, 1);
 assert.equal(groundedResearch.receipt.interactionId, "interaction-grounded");
 assert.equal(groundedResearch.receipt.groundingAttempts, 2);
+assert.deepEqual(sortIssuesByNumber([{ number: 2 }, { number: 1 }, { number: 11 }, { number: 3 }]).map((issue) => issue.number), [1, 2, 3, 11]);
 
 const selectedIssue = { number: 4, sourceUrl: "https://github.com/kmccarthy-hub/bottleshopmanager-backlog/issues/4" };
 const researcher = {

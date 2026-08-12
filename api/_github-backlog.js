@@ -31,6 +31,10 @@ function normaliseIssue(issue) {
   };
 }
 
+export function sortIssuesByNumber(issues) {
+  return [...issues].sort((first, second) => first.number - second.number);
+}
+
 export async function fetchBacklogIndex() {
   const { owner, repository } = repositoryConfig();
   const url = new URL(`https://api.github.com/repos/${owner}/${repository}/issues`);
@@ -39,7 +43,7 @@ export async function fetchBacklogIndex() {
   url.searchParams.set("direction", "asc");
   url.searchParams.set("per_page", "100");
   const { response, data } = await githubJson(url);
-  const issues = data.filter((issue) => !issue.pull_request).map(normaliseIssue);
+  const issues = sortIssuesByNumber(data.filter((issue) => !issue.pull_request).map(normaliseIssue));
   return { owner, repository, responseStatus: response.status, issues };
 }
 
