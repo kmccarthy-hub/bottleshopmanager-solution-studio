@@ -117,31 +117,31 @@ export default function Home() {
       const research = await postStage("researcher", { featureRequestNumber: selectedNumber });
       const next: Artifacts = { researcher: research.artifact };
       setArtifacts(next); setToolReceipt(research.toolReceipt); setMarketResearchReceipt(research.marketResearchReceipt); setStageStatus("researcher", "complete");
-      currentStage = "designer"; followStage(1); setStageStatus("designer", "running");
+      currentStage = "designer"; setStageStatus("designer", "running");
       const design = await postStage("designer", { runId: research.runId, artifacts: next });
-      next.designer = design.artifact; setArtifacts({ ...next }); setStageStatus("designer", "complete");
+      next.designer = design.artifact; setArtifacts({ ...next }); setStageStatus("designer", "complete"); followStage(1);
 
-      currentStage = "manager"; followStage(4); setStageStatus("manager", "running");
+      currentStage = "manager"; setStageStatus("manager", "running");
       const selection = await postStage("prototype-selection", { runId: research.runId, artifacts: next });
-      next.prototypeSelection = selection.artifact; setArtifacts({ ...next }); setStageStatus("manager", "idle");
+      next.prototypeSelection = selection.artifact; setArtifacts({ ...next }); setStageStatus("manager", "idle"); followStage(4);
 
       const selectedConcept = next.designer.concepts.find((concept) => concept.id === next.prototypeSelection?.selectedConceptId);
       if (!selectedConcept) throw new Error("The Manager selection did not match a Designer specification.");
       const makerArtifacts = { researcher: next.researcher, designer: { ...next.designer, concepts: [selectedConcept] }, prototypeSelection: next.prototypeSelection };
-      currentStage = "maker"; followStage(2); setStageStatus("maker", "running");
+      currentStage = "maker"; setStageStatus("maker", "running");
       const made = await postStage("maker", { runId: research.runId, artifacts: makerArtifacts });
-      next.maker = made.artifact; setPrototypeId(made.artifact.prototypes[0].conceptId); setArtifacts({ ...next }); setStageStatus("maker", "complete");
+      next.maker = made.artifact; setPrototypeId(made.artifact.prototypes[0].conceptId); setArtifacts({ ...next }); setStageStatus("maker", "complete"); followStage(2);
 
-      currentStage = "communicator"; followStage(3); setStageStatus("communicator", "running");
+      currentStage = "communicator"; setStageStatus("communicator", "running");
       const communicatorArtifacts = { researcher: next.researcher, prototypeSelection: next.prototypeSelection, maker: next.maker };
       const communication = await postStage("communicator", { runId: research.runId, artifacts: communicatorArtifacts });
-      next.communicator = communication.artifact; setArtifacts({ ...next }); setStageStatus("communicator", "complete");
+      next.communicator = communication.artifact; setArtifacts({ ...next }); setStageStatus("communicator", "complete"); followStage(3);
 
-      currentStage = "manager"; followStage(4); setStageStatus("manager", "running");
+      currentStage = "manager"; setStageStatus("manager", "running");
       const management = await postStage("manager", { runId: research.runId, artifacts: next });
-      next.manager = management.artifact; setArtifacts({ ...next }); setStageStatus("manager", "complete");
+      next.manager = management.artifact; setArtifacts({ ...next }); setStageStatus("manager", "complete"); followStage(4);
     } catch (error) {
-      setStageStatus(currentStage, "error"); setRunErrorStage(currentStage); setRunError(error instanceof Error ? error.message : "The agent chain stopped unexpectedly.");
+      setStageStatus(currentStage, "error"); followStage(stages.findIndex((stage) => stage.key === currentStage)); setRunErrorStage(currentStage); setRunError(error instanceof Error ? error.message : "The agent chain stopped unexpectedly.");
     }
   }
 
