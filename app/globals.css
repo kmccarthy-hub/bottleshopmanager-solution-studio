@@ -1181,6 +1181,25 @@ footer {
 .exception-state strong { font-size: 9px; }
 .exception-state p { color: #765e2e; font-size: 8px; }
 
+/* Isolated Maker-generated page prototypes */
+.generated-prototype-wrap { margin: 18px 22px; overflow: hidden; border: 1px solid #dcd8e2; border-radius: 13px; background: #f7f7fa; box-shadow: 0 14px 35px rgba(37,28,48,.1); }
+.prototype-safety-bar { min-height: 62px; display: flex; justify-content: space-between; gap: 20px; align-items: center; padding: 11px 15px; border-bottom: 1px solid #dcd8e2; background: #171321; color: white; }
+.prototype-safety-bar span, .prototype-safety-bar strong { display: block; }
+.prototype-safety-bar span { color: #9e96a8; font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
+.prototype-safety-bar strong { margin-top: 4px; font-size: 10px; }
+.prototype-safety-bar > div:last-child { display: flex; gap: 7px; }
+.prototype-safety-bar button { padding: 8px 10px; border: 1px solid #443b50; border-radius: 7px; background: #282130; color: white; cursor: pointer; font-size: 8px; font-weight: 800; }
+.prototype-safety-bar button:last-child { border-color: var(--violet); background: var(--violet); }
+.prototype-code-meta { display: flex; flex-wrap: wrap; gap: 7px; padding: 8px 12px; border-bottom: 1px solid #e5e1e8; background: #f2eff5; }
+.prototype-code-meta span { padding: 4px 7px; border-radius: 999px; background: white; color: #6f6677; font-size: 7px; font-weight: 750; }
+.generated-prototype-frame { width: 100%; height: 760px; display: block; border: 0; background: white; }
+.prototype-state-summary { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid #e5e1e8; background: white; }
+.prototype-state-summary > div { padding: 12px 15px; }
+.prototype-state-summary > div + div { border-left: 1px solid #e5e1e8; }
+.prototype-state-summary span, .prototype-state-summary strong { display: block; }
+.prototype-state-summary span { color: var(--violet-deep); font-size: 7px; font-weight: 850; text-transform: uppercase; }
+.prototype-state-summary strong { margin-top: 5px; color: #595160; font-size: 9px; line-height: 1.45; }
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after { transition-duration: 0.01ms !important; }

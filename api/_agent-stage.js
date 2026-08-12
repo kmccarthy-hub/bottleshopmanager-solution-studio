@@ -8,6 +8,7 @@ import {
   validateDownstreamArtifact,
 } from "../contracts/downstream.js";
 import { productBaselinePrompt } from "../domain/product-baseline.js";
+import { getPrototypeBaselinePackage, prototypeDesignTokens } from "../domain/prototype-baselines.js";
 import { isTransientServiceError, sendStageError } from "./_service-errors.js";
 
 const definitions = {
@@ -49,6 +50,7 @@ export function createAgentHandler(stage) {
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
       const predecessor = predecessorByStage[stage];
       const predecessorArtifactId = artifacts[predecessor]?.artifactId;
+      const makerBaselinePackage = stage === "maker" ? `\n\nIMMUTABLE CURRENT-PAGE SOURCE PACKAGE\n${JSON.stringify(getPrototypeBaselinePackage(artifacts.designer?.concepts))}\n\nVISUAL TOKENS\n${prototypeDesignTokens}` : "";
       let repairInstruction = "";
       let lastError;
       for (let attempt = 1; attempt <= 2; attempt += 1) {
@@ -57,7 +59,7 @@ export function createAgentHandler(stage) {
             model: process.env.GEMINI_MODEL,
             contents: [{
               role: "user",
-              parts: [{ text: `Continue BottleShopManager Solution Studio run ${runId}. Your immediate predecessor is ${predecessor}; its validated artifact ID is ${predecessorArtifactId}. Treat that explicit handoff as your primary working input and acknowledge it in receivedHandoff. Earlier artifacts are supplied for evidence audit and must not be ignored. Perform only the ${stage} responsibilities, preserve unresolved information gaps and create the required next handoff. Use the current-product baseline to locate proposed changes, but never treat it as customer evidence.${repairInstruction}\n\n${productBaselinePrompt}\n\nCUMULATIVE VALIDATED ARTIFACTS\n${JSON.stringify(artifacts)}` }],
+              parts: [{ text: `Continue BottleShopManager Solution Studio run ${runId}. Your immediate predecessor is ${predecessor}; its validated artifact ID is ${predecessorArtifactId}. Treat that explicit handoff as your primary working input and acknowledge it in receivedHandoff. Earlier artifacts are supplied for evidence audit and must not be ignored. Perform only the ${stage} responsibilities, preserve unresolved information gaps and create the required next handoff. Use the current-product baseline to locate proposed changes, but never treat it as customer evidence.${repairInstruction}\n\n${productBaselinePrompt}${makerBaselinePackage}\n\nCUMULATIVE VALIDATED ARTIFACTS\n${JSON.stringify(artifacts)}` }],
             }],
             config: {
               systemInstruction: definition.agent.systemPrompt,
