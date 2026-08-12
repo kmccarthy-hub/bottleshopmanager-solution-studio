@@ -15,10 +15,11 @@ const groundedResearch = extractMarketResearch({ id: "interaction-grounded", sta
   { type: "google_search_call", id: "search-1", arguments: { queries: ["example query"] } },
   { type: "google_search_result", call_id: "search-1", result: [] },
   { type: "model_output", content: [{ type: "text", text: "Grounded evidence", annotations: [{ type: "url_citation", title: "Official example", url: "https://example.invalid/help" }] }] },
-] });
+] }, 2);
 assert.equal(groundedResearch.receipt.sourceCount, 1);
 assert.equal(groundedResearch.receipt.searchCallCount, 1);
 assert.equal(groundedResearch.receipt.interactionId, "interaction-grounded");
+assert.equal(groundedResearch.receipt.groundingAttempts, 2);
 
 const selectedIssue = { number: 4, sourceUrl: "https://github.com/kmccarthy-hub/bottleshopmanager-backlog/issues/4" };
 const researcher = {

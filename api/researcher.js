@@ -21,7 +21,7 @@ function extractModelContent(response) {
   return content;
 }
 
-export function extractMarketResearch(interaction) {
+export function extractMarketResearch(interaction, groundingAttempts = 1) {
   const steps = interaction.steps ?? [];
   const searchCalls = steps.filter((step) => step.type === "google_search_call");
   const textBlocks = steps
@@ -40,7 +40,7 @@ export function extractMarketResearch(interaction) {
       completedAt: new Date().toISOString(),
       searchQueries,
       sourceCount: sources.length,
-      groundingAttempts: 1,
+      groundingAttempts,
       searchCallCount: searchCalls.length,
       interactionId: interaction.id,
       sources,
@@ -50,15 +50,24 @@ export function extractMarketResearch(interaction) {
 }
 
 async function requestGroundedMarketResearch(ai, model, selectedIssue) {
-  const interaction = await ai.interactions.create({
-    model,
-    input: `Research current market patterns relevant to this synthetic feature request. Prioritise official product pages or help documentation from comparable Irish and UK retail inventory, supplier-order or workforce software; use strong international examples when useful. Identify 2-4 workflow patterns, the supporting evidence, applicability to BottleShopManager and cautions. Include attributable citations for every market pattern. Do not design a final solution or make market-share claims.\n\nSELECTED LIVE REQUEST\n${JSON.stringify(selectedIssue)}\n\n${productBaselinePrompt}`,
-    system_instruction: "You are the live market-evidence retrieval substage for a product Researcher. The selected GitHub request has already been fetched and is included in the input. You must use Google Search, return a concise cited synthesis and avoid unsupported facts. Do not call or discuss the GitHub tool and do not design solutions.",
-    tools: [{ type: "google_search", search_types: ["web_search"] }],
-    generation_config: { max_output_tokens: 1600, thinking_level: "low", tool_choice: "any" },
-    store: false,
-  });
-  return extractMarketResearch(interaction);
+  let lastGroundingError;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const retryInstruction = attempt === 1 ? "" : " Your previous response did not include an observable Search call and URL citations, so search before answering this final attempt.";
+    const interaction = await ai.interactions.create({
+      model,
+      input: `Search the web and research current market patterns relevant to this synthetic feature request. Prioritise official product pages or help documentation from comparable Irish and UK retail inventory, supplier-order or workforce software; use strong international examples when useful. Identify 2-4 workflow patterns, the supporting evidence, applicability to BottleShopManager and cautions. Include attributable citations for every market pattern. Do not design a final solution or make market-share claims.${retryInstruction}\n\nSELECTED LIVE REQUEST\n${JSON.stringify(selectedIssue)}\n\n${productBaselinePrompt}`,
+      system_instruction: "You are the live market-evidence retrieval substage for a product Researcher. The selected GitHub request has already been fetched and is included in the input. Use the available Google Search tool once as needed, return a concise cited synthesis and avoid unsupported facts. Do not call or discuss the GitHub tool and do not design solutions.",
+      tools: [{ type: "google_search", search_types: ["web_search"] }],
+      generation_config: { max_output_tokens: 1600, thinking_level: "low", tool_choice: "auto" },
+      store: false,
+    });
+    try {
+      return extractMarketResearch(interaction, attempt);
+    } catch (error) {
+      lastGroundingError = error;
+    }
+  }
+  throw lastGroundingError;
 }
 
 export default async function handler(request, response) {
