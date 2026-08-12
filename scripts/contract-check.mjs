@@ -10,10 +10,15 @@ assert.equal(isTransientServiceError(new Error("This model is currently experien
 assert.equal(isTransientServiceError(new Error("Every generated page must provide a complete standalone document.")), false);
 assert.equal(isTransientServiceError(new Error("Artifact validation failed: prohibited prototype capability.")), false);
 assert.equal(isTransientServiceError({ status: 503, message: "Provider unavailable" }), true);
-assert.throws(() => extractMarketResearch({ text: "Ungrounded response", candidates: [{ groundingMetadata: {} }] }), /grounded market evidence/);
-const groundedResearch = extractMarketResearch({ text: "Grounded evidence", candidates: [{ groundingMetadata: { webSearchQueries: ["example query"], groundingChunks: [{ web: { title: "Official example", uri: "https://example.invalid/help" } }] } }] }, 2);
+assert.throws(() => extractMarketResearch({ id: "interaction-empty", status: "completed", output_text: "Ungrounded response", steps: [{ type: "model_output", content: [{ type: "text", text: "Ungrounded response" }] }] }), /forced Google Search interaction/);
+const groundedResearch = extractMarketResearch({ id: "interaction-grounded", status: "completed", output_text: "Grounded evidence", steps: [
+  { type: "google_search_call", id: "search-1", arguments: { queries: ["example query"] } },
+  { type: "google_search_result", call_id: "search-1", result: [] },
+  { type: "model_output", content: [{ type: "text", text: "Grounded evidence", annotations: [{ type: "url_citation", title: "Official example", url: "https://example.invalid/help" }] }] },
+] });
 assert.equal(groundedResearch.receipt.sourceCount, 1);
-assert.equal(groundedResearch.receipt.groundingAttempts, 2);
+assert.equal(groundedResearch.receipt.searchCallCount, 1);
+assert.equal(groundedResearch.receipt.interactionId, "interaction-grounded");
 
 const selectedIssue = { number: 4, sourceUrl: "https://github.com/kmccarthy-hub/bottleshopmanager-backlog/issues/4" };
 const researcher = {
