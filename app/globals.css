@@ -928,6 +928,21 @@ footer {
 .brief-grid strong { display: block; margin-top: 8px; font-size: 12px; }
 .brief-grid p { color: var(--muted); font-size: 9px; line-height: 1.5; }
 
+.decision-basis { margin: 24px 0 26px; overflow: hidden; border: 1px solid rgba(120,56,239,.16); border-radius: 16px; background: white; }
+.decision-basis-heading { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 20px 22px; border-bottom: 1px solid var(--line); background: linear-gradient(100deg, rgba(120,56,239,.055), rgba(22,143,157,.045)); }
+.decision-basis-heading h4 { margin: 4px 0 0; font-size: 19px; letter-spacing: -.025em; }
+.decision-basis-heading > span { padding: 7px 9px; border-radius: 999px; background: rgba(22,143,157,.11); color: #08717c; font-size: 8px; font-weight: 850; text-transform: uppercase; }
+.decision-basis-grid { display: grid; grid-template-columns: 1fr 1fr; }
+.decision-basis-grid > div { min-width: 0; display: grid; grid-template-columns: 32px 1fr; gap: 13px; padding: 21px 22px; }
+.decision-basis-grid > div + div { border-left: 1px solid var(--line); }
+.decision-basis-grid strong, .recommendation-sensitivity strong { font-size: 11px; }
+.decision-basis-grid p { margin: 7px 0 0; color: var(--muted); font-size: 10px; line-height: 1.55; }
+.decision-basis-icon { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 9px; background: rgba(120,56,239,.09); color: var(--violet-deep); font-size: 8px; font-weight: 900; }
+.recommendation-sensitivity { display: grid; grid-template-columns: 220px 1fr; gap: 24px; padding: 19px 22px; border-top: 1px solid var(--line); background: #fffaf6; }
+.recommendation-sensitivity > div { display: flex; align-items: center; gap: 13px; }
+.recommendation-sensitivity ul { margin: 0; padding-left: 17px; columns: 2; column-gap: 32px; }
+.recommendation-sensitivity li { break-inside: avoid; margin-bottom: 7px; color: var(--muted); font-size: 9px; line-height: 1.45; }
+
 .studio-ranking { border-top: 0; }
 .studio-ranking details { margin-top: 10px; border: 1px solid var(--line); border-radius: 12px; background: white; }
 .studio-ranking summary { display: grid; grid-template-columns: 42px 1fr auto; gap: 14px; align-items: center; padding: 15px; cursor: pointer; list-style: none; }
