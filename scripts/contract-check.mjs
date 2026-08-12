@@ -13,6 +13,8 @@ assert.equal(isTransientServiceError(new Error("Every generated page must provid
 assert.equal(isTransientServiceError(new Error("Artifact validation failed: prohibited prototype capability.")), false);
 assert.match(stageRepairGuidance("maker", new Error('Artifact validation failed: Blocked token: "mailto:".')), /type=button control/i);
 assert.doesNotMatch(stageRepairGuidance("maker", new Error('Artifact validation failed: Blocked token: "mailto:".')), /mailto:/i);
+assert.match(stageRepairGuidance("maker", new Error('Artifact validation failed: Maker CSS contains unscoped or baseline selector ".module-header".')), /matching \[data-prototype-element/);
+assert.match(stageRepairGuidance("maker", new Error("Artifact validation failed: Maker CSS length 42 is outside the permitted range.")), /between 80 and 12000 characters/);
 assert.equal(stageRepairGuidance("designer", new Error('Blocked token: "mailto:".')), "");
 assert.equal(isTransientServiceError({ status: 503, message: "Provider unavailable" }), true);
 assert.throws(() => extractMarketResearch({ id: "interaction-empty", status: "completed", output_text: "Ungrounded response", steps: [{ type: "model_output", content: [{ type: "text", text: "Ungrounded response" }] }] }), /forced Google Search interaction/);
@@ -82,7 +84,8 @@ assert.throws(() => validateDownstreamArtifact("maker", { ...maker, prototypes: 
 assert.throws(() => validateDownstreamArtifact("maker", { ...maker, prototypes: maker.prototypes.map((item, index) => index ? item : { ...item, modifications: item.modifications.map((modification) => ({ ...modification, targetAnchor: "invented-anchor" })) }) }, "run-1", artifacts));
 assert.throws(() => validateDownstreamArtifact("maker", { ...maker, prototypes: maker.prototypes.map((item, index) => index ? item : { ...item, modifications: item.modifications.map((modification) => ({ ...modification, html: modification.html.replace("<section", "<form").replace("</section>", "</form>") })) }) }, "run-1", artifacts), /blocked token "<form"/);
 assert.throws(() => validateDownstreamArtifact("maker", { ...maker, prototypes: maker.prototypes.map((item, index) => index ? item : { ...item, modifications: item.modifications.map((modification) => ({ ...modification, html: modification.html.replace("type=\"button\"", "type=\"button\" onclick=\"run()\"") })) }) }, "run-1", artifacts), /blocked token "onclick="/);
-assert.throws(() => validateDownstreamArtifact("maker", { ...maker, prototypes: maker.prototypes.map((item, index) => index ? item : { ...item, prototypeCss: `body{color:red}${item.prototypeCss}` }) }, "run-1", artifacts));
+assert.throws(() => validateDownstreamArtifact("maker", { ...maker, prototypes: maker.prototypes.map((item, index) => index ? item : { ...item, prototypeCss: `body{color:red}${item.prototypeCss}` }) }, "run-1", artifacts), /unscoped or baseline selector "body"/);
+assert.throws(() => validateDownstreamArtifact("maker", { ...maker, prototypes: maker.prototypes.map((item, index) => index ? item : { ...item, prototypeCss: ".prototype-x{color:red}" }) }, "run-1", artifacts), /CSS length \d+ is outside/);
 
 const communicator = {
   runId: "run-1", artifactId: "communicator-1", stage: "communicator", featureRequestNumber: 4,

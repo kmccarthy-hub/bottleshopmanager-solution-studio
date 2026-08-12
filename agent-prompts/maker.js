@@ -29,6 +29,7 @@ CUSTOM PROTOTYPE REQUIREMENTS
 
 SCOPING RULES
 - Every CSS selector must begin with [data-prototype-element] or .prototype-. Never style html, body, the platform shell, sidebar, baseline anchors or existing baseline classes.
+- Scope every selector in a comma-separated rule individually. Valid examples: [data-prototype-element="stock-alert"] .prototype-row and .prototype-stock-alert button. Invalid examples: button, table, .panel, .toolbar, .platform-main, .module-header, body, :root or *.
 - JavaScript may query and update only elements inside [data-prototype-element]. Use data-action and data-state attributes where practical.
 - Do not duplicate platform navigation, the module heading, existing tables or the current-workflow panel. The renderer already has them.
 - HTML fragments may use section, div, header, table, fieldset, label, input, select, textarea and button elements. Use type="button" on every button.

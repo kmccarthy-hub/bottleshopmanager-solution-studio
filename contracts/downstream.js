@@ -183,7 +183,13 @@ export function validateDownstreamArtifact(stage, artifact, runId, inputs) {
         if (blockedMarkup) throw new Error(`Generated prototype markup contains blocked token ${JSON.stringify(blockedMarkup.slice(0, 48))}. Use non-submitting controls in html, prototypeCss for styling and prototypeScript for behaviour.`);
       }
       const generatedCode = `${prototype.prototypeCss ?? ""}\n${prototype.prototypeScript ?? ""}`;
-      if (prototype.prototypeCss?.length < 80 || prototype.prototypeCss.length > 12000 || broadPrototypeCss.test(prototype.prototypeCss)) throw new Error("Maker CSS must be bounded and scoped only to generated prototype elements.");
+      const prototypeCssLength = prototype.prototypeCss?.length ?? 0;
+      if (prototypeCssLength < 80 || prototypeCssLength > 12000) throw new Error(`Maker CSS length ${prototypeCssLength} is outside the permitted 80-12000 character range.`);
+      const broadCssMatch = prototype.prototypeCss.match(broadPrototypeCss)?.[0];
+      if (broadCssMatch) {
+        const broadCssSelector = broadCssMatch.replace(/^[},]\s*/, "").replace(/\s*\{$/, "").trim();
+        throw new Error(`Maker CSS contains unscoped or baseline selector ${JSON.stringify(broadCssSelector)}. Every selector must begin with [data-prototype-element] or .prototype-.`);
+      }
       const blockedGeneratedCode = generatedCode.match(forbiddenPrototypeRuntime)?.[0];
       if (prototype.prototypeScript?.length < 80 || prototype.prototypeScript.length > 10000 || blockedGeneratedCode) throw new Error(`Maker interactions must be bounded and cannot request network, storage, navigation, embedding or parent-page capabilities.${blockedGeneratedCode ? ` Blocked token: ${JSON.stringify(blockedGeneratedCode.slice(0, 48))}.` : ""}`);
       if (!prototype.modifications.some((item) => /<button\b/i.test(item.html)) || !/data-prototype-element|\.prototype-/i.test(prototype.prototypeScript)) throw new Error("Every generated page modification must include feature-specific controls and scoped interactive behaviour.");
