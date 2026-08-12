@@ -11,6 +11,9 @@ export type InteractivePrototype = {
   currentWorkflow: string;
   proposedWorkflow: string;
   testableAssumption: string;
+  implementedDesignElements: string[];
+  omittedDesignElements: string[];
+  designTraceability: string;
   changeHighlights: string[];
   sampleRecords: PrototypeRecord[];
   primaryActionLabel: string;
