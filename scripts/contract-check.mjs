@@ -46,19 +46,22 @@ const maker = {
   receivedHandoff: { artifactId: "selection-1" }, communicatorHandoff: { artifactId: "maker-1" },
   prototypes: artifacts.designer.concepts.map((concept) => {
     const baseline = baselinePackage.find((item) => item.conceptId === concept.id);
-    const documentHtml = `<!doctype html><html><head><style>body{margin:0;padding:24px;background:#f7f7fa;color:#171222;font-family:Arial,sans-serif}.notice{padding:12px;background:#171222;color:white}.bsm-page{padding:24px}.module-header{display:flex;justify-content:space-between}.panel,.card-grid,.kpi-grid,.toolbar,.step-flow,.calendar{margin-top:18px;padding:18px;border:1px solid #ddd;border-radius:14px;background:white}.card-grid,.kpi-grid,.step-flow,.calendar{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.row,.person-card{padding:12px;border-top:1px solid #eee}table{width:100%;border-collapse:collapse}th,td{padding:10px;text-align:left;border-bottom:1px solid #eee}button{padding:8px 12px;border:0;border-radius:7px;background:#7c3aed;color:white}.feature{margin-top:18px;padding:18px;border:2px solid #7c3aed;border-radius:14px;background:#f3effd}.current-workflow{margin-top:18px;padding:14px;background:#e8f7f8}.hidden{display:none}</style></head><body><div class="notice">AI-GENERATED PROTOTYPE · SYNTHETIC DATA · DOES NOT CHANGE CURRENT PLATFORM</div>${baseline.html}<section class="feature"><h2>Example proposed feature</h2><p>This custom feature is added to the copied current page for isolated testing only.</p><button id="test" type="button">Test interaction</button><p id="state" class="hidden">Changed prototype state</p></section><script>document.getElementById('test').addEventListener('click',()=>document.getElementById('state').classList.toggle('hidden'));</script></body></html>`;
     return {
     conceptId: concept.id, baselineSurface: concept.baselineSurface,
     baselineSourceId: baseline.sourceId, baselineAnchorsPreserved: baseline.anchors.slice(0, 2),
     implementedDesignElements: ["Example design element"], designTraceability: "Implements the supplied specification.",
-    documentHtml,
+    modifications: [{ id: "example-feature", targetAnchor: baseline.anchors[1], placement: "after", purpose: "Add the selected feature in context.", html: '<section data-prototype-element="example-feature" class="prototype-example"><h2>Example proposed feature</h2><p>This custom feature is added to the locked current page copy for isolated testing only.</p><button data-action="toggle" type="button">Test interaction</button><p data-state="result" hidden>Changed prototype state</p></section>' }],
+    prototypeCss: '[data-prototype-element="example-feature"]{margin-top:16px;padding:18px;border:2px solid #7c3aed;border-radius:12px;background:#f3effd}.prototype-example button{padding:8px 12px;border:0;border-radius:7px;background:#7c3aed;color:#fff}',
+    prototypeScript: 'document.querySelectorAll("[data-prototype-element]").forEach((root)=>{const button=root.querySelector("[data-action=toggle]");const result=root.querySelector("[data-state=result]");if(button&&result)button.addEventListener("click",()=>{result.hidden=!result.hidden;});});',
     };
   }),
 };
 validateDownstreamArtifact("maker", maker, "run-1", artifacts);
 assert.throws(() => validateDownstreamArtifact("maker", { ...maker, prototypes: maker.prototypes.map((item) => ({ ...item, implementedDesignElements: [] })) }, "run-1", artifacts));
-assert.throws(() => validateDownstreamArtifact("maker", { ...maker, prototypes: maker.prototypes.map((item, index) => index ? item : { ...item, documentHtml: item.documentHtml.replace("</script>", "fetch('https://example.com')</script>") }) }, "run-1", artifacts));
+assert.throws(() => validateDownstreamArtifact("maker", { ...maker, prototypes: maker.prototypes.map((item, index) => index ? item : { ...item, prototypeScript: `${item.prototypeScript} fetch('https://example.com')` }) }, "run-1", artifacts));
 assert.throws(() => validateDownstreamArtifact("maker", { ...maker, prototypes: maker.prototypes.map((item, index) => index ? item : { ...item, baselineAnchorsPreserved: ["invented-anchor"] }) }, "run-1", artifacts));
+assert.throws(() => validateDownstreamArtifact("maker", { ...maker, prototypes: maker.prototypes.map((item, index) => index ? item : { ...item, modifications: item.modifications.map((modification) => ({ ...modification, targetAnchor: "invented-anchor" })) }) }, "run-1", artifacts));
+assert.throws(() => validateDownstreamArtifact("maker", { ...maker, prototypes: maker.prototypes.map((item, index) => index ? item : { ...item, prototypeCss: `body{color:red}${item.prototypeCss}` }) }, "run-1", artifacts));
 
 const communicator = {
   runId: "run-1", artifactId: "communicator-1", stage: "communicator", featureRequestNumber: 4,
@@ -72,4 +75,4 @@ validateDownstreamArtifact("manager", {
   ranking: designer.concepts.map((concept, index) => ({ conceptId: concept.id, rank: index + 1 })),
 }, "run-1", { researcher, designer, prototypeSelection, maker, communicator });
 
-console.log("Contract checks passed: three-option Manager gate, one selected sandbox prototype, single-prototype communication and final three-option governance.");
+console.log("Contract checks passed: three-option Manager gate, one selected baseline-locked modification prototype, single-prototype communication and final three-option governance.");

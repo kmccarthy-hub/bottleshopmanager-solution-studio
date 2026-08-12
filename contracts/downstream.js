@@ -79,10 +79,13 @@ export const makerOutputSchema = {
           currentWorkflow: { type: "string" }, proposedWorkflow: { type: "string" }, testableAssumption: { type: "string" },
           implementedDesignElements: stringArray, omittedDesignElements: stringArray, designTraceability: { type: "string" },
           changeHighlights: { type: "array", minItems: 3, maxItems: 3, items: { type: "string" } },
-          documentHtml: { type: "string" }, interactionSummary: { type: "string" }, interactiveStates: { type: "array", minItems: 2, items: { type: "string" } },
+          modifications: { type: "array", minItems: 1, maxItems: 6, items: { type: "object", additionalProperties: false, properties: {
+            id: { type: "string" }, targetAnchor: { type: "string" }, placement: { type: "string", enum: ["before", "after", "prepend", "append"] }, purpose: { type: "string" }, html: { type: "string" },
+          }, required: ["id", "targetAnchor", "placement", "purpose", "html"] } },
+          prototypeCss: { type: "string" }, prototypeScript: { type: "string" }, interactionSummary: { type: "string" }, interactiveStates: { type: "array", minItems: 2, items: { type: "string" } },
           limitations: stringArray, humanTestPrompts: stringArray,
         },
-        required: ["conceptId", "title", "purpose", "baselineSurface", "baselineSourceId", "baselineAnchorsPreserved", "currentWorkflow", "proposedWorkflow", "testableAssumption", "implementedDesignElements", "omittedDesignElements", "designTraceability", "changeHighlights", "documentHtml", "interactionSummary", "interactiveStates", "limitations", "humanTestPrompts"],
+        required: ["conceptId", "title", "purpose", "baselineSurface", "baselineSourceId", "baselineAnchorsPreserved", "currentWorkflow", "proposedWorkflow", "testableAssumption", "implementedDesignElements", "omittedDesignElements", "designTraceability", "changeHighlights", "modifications", "prototypeCss", "prototypeScript", "interactionSummary", "interactiveStates", "limitations", "humanTestPrompts"],
       },
     },
     informationGaps: { type: "array", items: gapSchema }, communicatorHandoff: nextHandoffSchema("communicator"),
@@ -162,20 +165,28 @@ export function validateDownstreamArtifact(stage, artifact, runId, inputs) {
     const prototypeIds = ids(artifact.prototypes, "conceptId");
     if (prototypeIds.length !== 1 || prototypeIds[0] !== inputs.prototypeSelection?.selectedConceptId || prototypeIds.some((id) => !conceptIds.includes(id))) throw new Error("The Maker must create exactly one prototype for the Manager-selected Designer specification.");
     const baselines = getPrototypeBaselinePackage(concepts);
-    const forbiddenPrototypeCode = /<\s*(?:a|iframe|object|embed|base|form)\b|<script[^>]+src\s*=|<meta[^>]+http-equiv\s*=\s*["']?refresh|\b(?:fetch|XMLHttpRequest|WebSocket|EventSource|sendBeacon|localStorage|sessionStorage|indexedDB|serviceWorker|window\.open|document\.cookie|window\.parent|window\.top|window\.opener|eval\s*\(|Function\s*\(|(?:window\.|document\.)?location\s*[.=])|https?:\/\/|javascript:/i;
+    const forbiddenPrototypeCode = /<\s*(?:a|iframe|object|embed|base|form|script|style|link|meta)\b|\bon\w+\s*=|\b(?:fetch|XMLHttpRequest|WebSocket|EventSource|sendBeacon|localStorage|sessionStorage|indexedDB|serviceWorker|window\.open|document\.cookie|window\.parent|window\.top|window\.opener|eval\s*\(|Function\s*\(|(?:window\.|document\.)?location\s*[.=])|https?:\/\/|javascript:/i;
+    const broadPrototypeCss = /(^|[},])\s*(?:html|body|\*|:root|\.platform-|\.bsm-page|\.module-header|\.current-workflow|\[data-baseline)[^{,]*\{/im;
     for (const prototype of artifact.prototypes) {
       const concept = concepts.find((item) => item.id === prototype.conceptId);
       if (!concept || prototype.baselineSurface !== concept.baselineSurface) throw new Error("Each Maker prototype must preserve its Designer specification's current-product surface.");
       if (!prototype.implementedDesignElements?.length || !prototype.designTraceability) throw new Error("Every Maker prototype must state how it implements the Designer specification.");
       const baseline = baselines.find((item) => item.conceptId === prototype.conceptId);
       if (!baseline || prototype.baselineSourceId !== baseline.sourceId) throw new Error("Every Maker prototype must identify the immutable baseline page source it modified.");
-      if (prototype.documentHtml?.length < 2000 || prototype.documentHtml.length > 18000 || !/<(?:!doctype\s+html|html)\b/i.test(prototype.documentHtml)) throw new Error("Every Maker prototype must provide a complete standalone HTML document between 2 KB and 18 KB.");
-      if (forbiddenPrototypeCode.test(prototype.documentHtml)) throw new Error("Generated prototype code requested a prohibited network, storage, navigation, embedding or parent-page capability.");
-      if (!/AI-GENERATED PROTOTYPE/i.test(prototype.documentHtml) || !/SYNTHETIC DATA/i.test(prototype.documentHtml)) throw new Error("Every generated page must visibly identify itself as an AI-generated prototype using synthetic data.");
-      if (!/<script\b/i.test(prototype.documentHtml) || !/<button\b/i.test(prototype.documentHtml)) throw new Error("Every generated page must contain its own interactive behaviour and at least one button.");
-      if (prototype.baselineAnchorsPreserved?.length < 2 || prototype.baselineAnchorsPreserved.some((anchor) => !baseline.anchors.includes(anchor) || !prototype.documentHtml.includes(`data-baseline-anchor="${anchor}"`))) throw new Error("Every generated page must preserve at least two verified elements from the relevant current-platform page.");
+      const modificationIds = ids(prototype.modifications, "id");
+      if (!prototype.modifications?.length || new Set(modificationIds).size !== modificationIds.length) throw new Error("Every Maker prototype must provide uniquely identified page modifications.");
+      for (const modification of prototype.modifications) {
+        if (!baseline.anchors.includes(modification.targetAnchor)) throw new Error(`The Maker targeted an unknown baseline anchor: ${modification.targetAnchor}.`);
+        if (modification.html?.length < 80 || modification.html.length > 8000 || !modification.html.includes(`data-prototype-element="${modification.id}"`)) throw new Error("Every Maker modification must provide a bounded HTML fragment marked with its matching data-prototype-element ID.");
+        if (forbiddenPrototypeCode.test(modification.html)) throw new Error("Generated prototype markup requested a prohibited capability or inline executable content.");
+      }
+      const generatedCode = `${prototype.prototypeCss ?? ""}\n${prototype.prototypeScript ?? ""}`;
+      if (prototype.prototypeCss?.length < 80 || prototype.prototypeCss.length > 12000 || broadPrototypeCss.test(prototype.prototypeCss)) throw new Error("Maker CSS must be bounded and scoped only to generated prototype elements.");
+      if (prototype.prototypeScript?.length < 80 || prototype.prototypeScript.length > 10000 || forbiddenPrototypeCode.test(generatedCode)) throw new Error("Maker interactions must be bounded and cannot request network, storage, navigation, embedding or parent-page capabilities.");
+      if (!prototype.modifications.some((item) => /<button\b/i.test(item.html)) || !/data-prototype-element|\.prototype-/i.test(prototype.prototypeScript)) throw new Error("Every generated page modification must include feature-specific controls and scoped interactive behaviour.");
+      if (prototype.baselineAnchorsPreserved?.length < 2 || prototype.baselineAnchorsPreserved.some((anchor) => !baseline.anchors.includes(anchor))) throw new Error("Every generated page must acknowledge at least two verified elements from the relevant current-platform page.");
     }
-    const makerText = JSON.stringify({ ...artifact, prototypes: artifact.prototypes.map((prototype) => Object.fromEntries(Object.entries(prototype).filter(([key]) => key !== "documentHtml"))) });
+    const makerText = JSON.stringify({ ...artifact, prototypes: artifact.prototypes.map((prototype) => Object.fromEntries(Object.entries(prototype).filter(([key]) => !["modifications", "prototypeCss", "prototypeScript"].includes(key)))) });
     const upstreamText = JSON.stringify({ researcher: inputs.researcher, designer: inputs.designer });
     const unsupportedTokens = [...(makerText.match(/\b(?:SKU|PO|ORDER|JIRA|LINEAR)-?\d+\b/gi) ?? []), ...(makerText.match(/(?:â‚¬|Â£|\$)\s?\d+(?:\.\d+)?/g) ?? []), ...(makerText.match(/\b\d+(?:\.\d+)?%\b/g) ?? [])].filter((token) => !upstreamText.toLowerCase().includes(token.toLowerCase()));
     if (unsupportedTokens.length) throw new Error(`The Maker invented unsupported identifiers or figures: ${[...new Set(unsupportedTokens)].join(", ")}. Use an explicit synthetic placeholder instead.`);
