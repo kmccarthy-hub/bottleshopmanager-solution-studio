@@ -2,6 +2,7 @@ import { FunctionCallingConfigMode, GoogleGenAI } from "@google/genai";
 import { researcher } from "../agent-prompts/researcher.js";
 import { researcherOutputSchema, validateResearcherArtifact } from "../contracts/researcher.js";
 import { fetchSelectedFeatureRequest, setCors } from "./_github-backlog.js";
+import { sendStageError } from "./_service-errors.js";
 
 const backlogTool = {
   name: "fetch_selected_feature_request",
@@ -65,6 +66,6 @@ export default async function handler(request, response) {
       toolReceipt: toolResult.receipt, artifact,
     });
   } catch (error) {
-    return response.status(500).json({ runId, stage: "researcher", error: error instanceof Error ? error.message : "The Researcher stage failed.", aiDisclosure: "No completed AI recommendation was produced." });
+    return sendStageError(response, "researcher", runId, error);
   }
 }

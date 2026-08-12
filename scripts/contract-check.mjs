@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { validateResearcherArtifact } from "../contracts/researcher.js";
 import { validateDownstreamArtifact } from "../contracts/downstream.js";
+import { isTransientServiceError, serviceStatus } from "../api/_service-errors.js";
+
+assert.equal(serviceStatus(new Error('{"error":{"code":503,"status":"UNAVAILABLE"}}')), 503);
+assert.equal(isTransientServiceError(new Error("This model is currently experiencing high demand.")), true);
+assert.equal(isTransientServiceError(new Error("The Maker artefact failed schema validation.")), false);
 
 const selectedIssue = { number: 4, sourceUrl: "https://github.com/kmccarthy-hub/bottleshopmanager-backlog/issues/4" };
 const researcher = {

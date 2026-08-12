@@ -40,6 +40,7 @@ export default function Home() {
   const [artifacts, setArtifacts] = useState<Artifacts>({});
   const [toolReceipt, setToolReceipt] = useState<{ completedAt: string; responseStatus: number; selectedIssueNumber: number; backlogIssueCount: number; returnedCommentCount: number } | null>(null);
   const [runError, setRunError] = useState("");
+  const [retryNotice, setRetryNotice] = useState("");
   const [prototypeId, setPrototypeId] = useState("");
   const apiBaseUrl = API_BASE_URL;
   const selectedIssue = backlog.find((issue) => issue.number === selectedNumber);
@@ -58,15 +59,23 @@ export default function Home() {
   function setStageStatus(key: StageKey, status: StageStatus) { setStatuses((current) => ({ ...current, [key]: status })); }
 
   async function postStage(key: StageKey, body: object) {
-    const response = await fetch(`${apiBaseUrl}/api/${key}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error ?? `${key} could not complete.`);
-    return payload;
+    const retryDelays = [0, 4000, 9000];
+    for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
+      if (retryDelays[attempt]) {
+        setRetryNotice(`${stages.find((stage) => stage.key === key)?.role} AI service is busy. Automatic retry ${attempt} of ${retryDelays.length - 1}…`);
+        await new Promise((resolve) => window.setTimeout(resolve, retryDelays[attempt]));
+      }
+      const response = await fetch(`${apiBaseUrl}/api/${key}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const payload = await response.json().catch(() => ({ error: `${key} returned an unreadable response.` }));
+      if (response.ok) { setRetryNotice(""); return payload; }
+      if (!payload.retryable || attempt === retryDelays.length - 1) { setRetryNotice(""); throw new Error(payload.error ?? `${key} could not complete.`); }
+    }
+    throw new Error(`${key} could not complete after automatic retries.`);
   }
 
   async function exploreSolutions() {
     if (!apiBaseUrl || !selectedNumber) return;
-    setRunError(""); setArtifacts({}); setStatuses(initialStatuses); setToolReceipt(null); setPrototypeId("");
+    setRunError(""); setRetryNotice(""); setArtifacts({}); setStatuses(initialStatuses); setToolReceipt(null); setPrototypeId("");
     let currentStage: StageKey = "researcher";
     try {
       setActiveStage(0); setStageStatus("researcher", "running");
@@ -107,6 +116,7 @@ export default function Home() {
         {selectedIssue && <div className="selected-request"><div><span>Selected live issue</span><strong>#{selectedIssue.number} · {selectedIssue.title}</strong></div><a href={selectedIssue.sourceUrl} target="_blank" rel="noreferrer">View source ↗</a><p>{selectedIssue.body.replace(/[*#>]/g, " ").replace(/\s+/g, " ").slice(0, 250)}…</p></div>}
         <button className="primary-button studio-button" type="button" onClick={exploreSolutions} disabled={runActive || backlogState !== "ready" || !selectedNumber}>{runActive ? `${stages[activeStage].role} is working…` : artifacts.manager ? "Run this request again" : "Explore three solutions"}<span aria-hidden="true">→</span></button>
         <p className="decision-note">No feature, roadmap or investment decision is written back.</p>
+        {retryNotice && <div className="retry-notice" role="status"><strong>Temporary AI demand</strong><br />{retryNotice}</div>}
         {runError && <div className="run-error" role="alert"><strong>Pipeline stopped at {stages[activeStage].role}:</strong> {runError}</div>}
       </aside>
     </section>

@@ -821,6 +821,8 @@ footer {
 .selected-request p { margin: 13px 0 0; color: #aaa4b1; font-size: 10px; line-height: 1.55; }
 .studio-button { width: 100%; justify-content: space-between; margin-top: 18px; background: linear-gradient(95deg, var(--violet), #9452ea); }
 .decision-note { margin: 10px 0 0; color: #8d8796; font-size: 9px; text-align: center; }
+.retry-notice { margin-top: 12px; padding: 11px 13px; border: 1px solid rgba(216,154,44,.28); border-radius: 9px; background: rgba(216,154,44,.1); color: #f5d58e; font-size: 9px; line-height: 1.5; }
+.retry-notice strong { color: #fff0c7; }
 
 .studio-pipeline { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
 .pipeline-node { min-height: 155px; display: grid; grid-template-columns: 38px 1fr; grid-template-rows: auto 1fr; gap: 12px; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,.68); color: var(--ink); cursor: pointer; text-align: left; transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease; }

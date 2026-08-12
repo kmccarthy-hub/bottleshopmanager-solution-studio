@@ -8,6 +8,7 @@ import {
   validateDownstreamArtifact,
 } from "../contracts/downstream.js";
 import { productBaselinePrompt } from "../domain/product-baseline.js";
+import { isTransientServiceError, sendStageError } from "./_service-errors.js";
 
 const definitions = {
   designer: { agent: agents.designer, schema: designerOutputSchema, required: ["researcher"] },
@@ -64,6 +65,7 @@ export function createAgentHandler(stage) {
           validateDownstreamArtifact(stage, artifact, runId, artifacts);
           return response.status(200).json({ runId, stage, validationAttempts: attempt, aiDisclosure: "AI-generated analysis - verify before use", artifact });
         } catch (error) {
+          if (isTransientServiceError(error)) throw error;
           lastError = error;
           if (attempt === 1) {
             repairInstruction = `\n\nYour previous draft failed server validation: ${error instanceof Error ? error.message : "invalid output"}. Correct that specific failure without changing the supplied evidence or inventing replacement facts.`;
@@ -72,7 +74,7 @@ export function createAgentHandler(stage) {
       }
       throw lastError;
     } catch (error) {
-      return response.status(500).json({ runId, stage, error: error instanceof Error ? error.message : `The ${stage} stage failed.`, aiDisclosure: "No completed AI recommendation was produced." });
+      return sendStageError(response, stage, runId, error);
     }
   };
 }
