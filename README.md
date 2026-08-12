@@ -6,11 +6,11 @@ A Product Manager selects one live synthetic feature request from GitHub. Five d
 
 ## Agent chain
 
-1. Researcher explicitly calls `fetch_selected_feature_request` for the selected issue and assesses its information quality.
-2. Designer creates one focused, one integrated and one exploratory concept.
-3. Maker creates one constrained interactive prototype for each concept.
-4. Communicator creates three comparable internal decision briefs.
-5. Manager ranks the concepts, explains every agent's contribution and consolidates questions that would improve the backlog request.
+1. Researcher explicitly calls `fetch_selected_feature_request`, uses live Google Search grounding, analyses the current product and produces an opportunity brief.
+2. Designer acknowledges that Researcher artifact and creates a recommended, alternative and variation/extended design specification.
+3. Maker acknowledges the Designer artifact and creates one traceable interactive prototype for each specification.
+4. Communicator acknowledges the Maker artifact and explains changes, impact and qualitative implementation effort.
+5. Manager acknowledges the Communicator artifact, audits the complete chain, ranks the concepts and provides an advisory recommendation.
 
 The Manager does not select, approve or write anything back. The Product Manager retains the final decision.
 
@@ -20,4 +20,4 @@ The static Vite frontend is designed for GitHub Pages. Five serverless agent han
 
 ## Live source
 
-The dedicated public `bottleshopmanager-backlog` repository contains ten clearly labelled synthetic feature requests. The Researcher requests the selected issue, comments and live backlog context at runtime with caching disabled. No bundled backlog substitutes for the tool result.
+The dedicated public `bottleshopmanager-backlog` repository contains ten clearly labelled synthetic feature requests. The Researcher requests the selected issue, comments and live backlog context at runtime with caching disabled, then performs grounded live market research with attributable sources. No bundled backlog substitutes for either evidence step.

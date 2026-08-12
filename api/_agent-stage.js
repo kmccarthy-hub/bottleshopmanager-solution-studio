@@ -17,6 +17,8 @@ const definitions = {
   manager: { agent: agents.manager, schema: managerOutputSchema, required: ["researcher", "designer", "maker", "communicator"] },
 };
 
+const predecessorByStage = { designer: "researcher", maker: "designer", communicator: "maker", manager: "communicator" };
+
 function setCors(request, response) {
   const origin = request.headers.origin;
   const allowedOrigin = process.env.ALLOWED_ORIGIN;
@@ -45,6 +47,8 @@ export function createAgentHandler(stage) {
 
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const predecessor = predecessorByStage[stage];
+      const predecessorArtifactId = artifacts[predecessor]?.artifactId;
       let repairInstruction = "";
       let lastError;
       for (let attempt = 1; attempt <= 2; attempt += 1) {
@@ -53,7 +57,7 @@ export function createAgentHandler(stage) {
             model: process.env.GEMINI_MODEL,
             contents: [{
               role: "user",
-              parts: [{ text: `Continue BottleShopManager Solution Studio run ${runId}. Review every supplied upstream artefact, perform only the ${stage} responsibilities, preserve all information gaps and return the required handoff. Use the supplied current-product baseline to locate proposed changes, but never treat the baseline as customer evidence.${repairInstruction}\n\n${productBaselinePrompt}\n\nUPSTREAM ARTEFACTS\n${JSON.stringify(artifacts)}` }],
+              parts: [{ text: `Continue BottleShopManager Solution Studio run ${runId}. Your immediate predecessor is ${predecessor}; its validated artifact ID is ${predecessorArtifactId}. Treat that explicit handoff as your primary working input and acknowledge it in receivedHandoff. Earlier artifacts are supplied for evidence audit and must not be ignored. Perform only the ${stage} responsibilities, preserve unresolved information gaps and create the required next handoff. Use the current-product baseline to locate proposed changes, but never treat it as customer evidence.${repairInstruction}\n\n${productBaselinePrompt}\n\nCUMULATIVE VALIDATED ARTIFACTS\n${JSON.stringify(artifacts)}` }],
             }],
             config: {
               systemInstruction: definition.agent.systemPrompt,
