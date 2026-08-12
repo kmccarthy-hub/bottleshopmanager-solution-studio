@@ -11,6 +11,7 @@ import {
 import { productBaselinePrompt } from "../domain/product-baseline.js";
 import { getPrototypeBaselinePackage, prototypeDesignTokens } from "../domain/prototype-baselines.js";
 import { isTransientServiceError, sendStageError } from "./_service-errors.js";
+import { stageRepairGuidance } from "./_stage-repair.js";
 
 const definitions = {
   designer: { agent: agents.designer, schema: designerOutputSchema, required: ["researcher"] },
@@ -80,7 +81,7 @@ export function createAgentHandler(stage) {
           if (isTransientServiceError(error)) throw error;
           lastError = error;
           if (attempt === 1) {
-            repairInstruction = `\n\nYour previous draft failed server validation: ${error instanceof Error ? error.message : "invalid output"}. Correct that specific failure without changing the supplied evidence or inventing replacement facts.`;
+            repairInstruction = `\n\nYour previous draft failed server validation: ${error instanceof Error ? error.message : "invalid output"}. Correct that specific failure without changing the supplied evidence or inventing replacement facts.${stageRepairGuidance(stage, error)}`;
           }
         }
       }

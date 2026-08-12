@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { validateResearcherArtifact } from "../contracts/researcher.js";
 import { validateDownstreamArtifact } from "../contracts/downstream.js";
 import { isTransientServiceError, serviceStatus } from "../api/_service-errors.js";
+import { stageRepairGuidance } from "../api/_stage-repair.js";
 import { getPrototypeBaselinePackage } from "../domain/prototype-baselines.js";
 import { extractMarketResearch } from "../api/researcher.js";
 
@@ -9,6 +10,9 @@ assert.equal(serviceStatus(new Error('{"error":{"code":503,"status":"UNAVAILABLE
 assert.equal(isTransientServiceError(new Error("This model is currently experiencing high demand.")), true);
 assert.equal(isTransientServiceError(new Error("Every generated page must provide a complete standalone document.")), false);
 assert.equal(isTransientServiceError(new Error("Artifact validation failed: prohibited prototype capability.")), false);
+assert.match(stageRepairGuidance("maker", new Error('Artifact validation failed: Blocked token: "mailto:".')), /type=button control/i);
+assert.doesNotMatch(stageRepairGuidance("maker", new Error('Artifact validation failed: Blocked token: "mailto:".')), /mailto:/i);
+assert.equal(stageRepairGuidance("designer", new Error('Blocked token: "mailto:".')), "");
 assert.equal(isTransientServiceError({ status: 503, message: "Provider unavailable" }), true);
 assert.throws(() => extractMarketResearch({ id: "interaction-empty", status: "completed", output_text: "Ungrounded response", steps: [{ type: "model_output", content: [{ type: "text", text: "Ungrounded response" }] }] }), /forced Google Search interaction/);
 const groundedResearch = extractMarketResearch({ id: "interaction-grounded", status: "completed", output_text: "Grounded evidence", steps: [
@@ -70,6 +74,8 @@ const maker = {
 validateDownstreamArtifact("maker", maker, "run-1", artifacts);
 assert.throws(() => validateDownstreamArtifact("maker", { ...maker, prototypes: maker.prototypes.map((item) => ({ ...item, implementedDesignElements: [] })) }, "run-1", artifacts));
 assert.throws(() => validateDownstreamArtifact("maker", { ...maker, prototypes: maker.prototypes.map((item, index) => index ? item : { ...item, prototypeScript: `${item.prototypeScript} fetch('https://example.com')` }) }, "run-1", artifacts));
+assert.throws(() => validateDownstreamArtifact("maker", { ...maker, prototypes: maker.prototypes.map((item, index) => index ? item : { ...item, prototypeScript: `${item.prototypeScript} const unsafeEmailProtocol = "mailto:";` }) }, "run-1", artifacts), /Blocked token: "mailto:"/);
+assert.doesNotThrow(() => validateDownstreamArtifact("maker", { ...maker, prototypes: maker.prototypes.map((item, index) => index ? item : { ...item, prototypeScript: `${item.prototypeScript} document.querySelectorAll("[data-prototype-element]").forEach((root)=>{root.dataset.emailState="compose-preview";});` }) }, "run-1", artifacts));
 assert.throws(() => validateDownstreamArtifact("maker", { ...maker, prototypes: maker.prototypes.map((item, index) => index ? item : { ...item, baselineAnchorsPreserved: ["invented-anchor"] }) }, "run-1", artifacts));
 assert.throws(() => validateDownstreamArtifact("maker", { ...maker, prototypes: maker.prototypes.map((item, index) => index ? item : { ...item, modifications: item.modifications.map((modification) => ({ ...modification, targetAnchor: "invented-anchor" })) }) }, "run-1", artifacts));
 assert.throws(() => validateDownstreamArtifact("maker", { ...maker, prototypes: maker.prototypes.map((item, index) => index ? item : { ...item, modifications: item.modifications.map((modification) => ({ ...modification, html: modification.html.replace("<section", "<form").replace("</section>", "</form>") })) }) }, "run-1", artifacts), /blocked token "<form"/);

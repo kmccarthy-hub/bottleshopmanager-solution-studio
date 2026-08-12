@@ -33,7 +33,8 @@ SCOPING RULES
 - Do not duplicate platform navigation, the module heading, existing tables or the current-workflow panel. The renderer already has them.
 - HTML fragments may use section, div, header, table, fieldset, label, input, select, textarea and button elements. Use type="button" on every button.
 - Do not use a, form, script, style, link, meta, iframe, object, embed or base elements. Do not use href, src, action, formaction or inline on-event attributes. Put all styling in prototypeCss and all behaviour in prototypeScript.
-- Simulate integrations such as email, export or navigation as visible in-prototype states. Never use mailto links, live URLs or actual submission controls.
+- Simulate integrations such as email, export or navigation as visible in-prototype states. Never use mail links, live URLs or actual submission controls.
+- Protocol strings for email, web links and executable URLs must not appear anywhere in generated HTML, CSS or JavaScript, including comments, labels and status copy. If the selected specification proposes an external integration, represent it with a local type=button control that opens a generated panel or toggles a generated confirmation state.
 
 STRICT SANDBOX RULES
 Generated fragments are untrusted prototypes. Use no external URLs, assets, imports, frames, forms, network requests, browser storage, cookies, downloads, navigation, popups, parent/top/opener access, dynamic code evaluation or service workers. Use no script src, fetch, XMLHttpRequest, WebSocket, EventSource, sendBeacon, localStorage, sessionStorage, indexedDB, eval or Function. Simple JavaScript may only update generated prototype elements in the disposable document.
