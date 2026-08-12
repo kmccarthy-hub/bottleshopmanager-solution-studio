@@ -1199,6 +1199,7 @@ footer {
 .prototype-state-summary span, .prototype-state-summary strong { display: block; }
 .prototype-state-summary span { color: var(--violet-deep); font-size: 7px; font-weight: 850; text-transform: uppercase; }
 .prototype-state-summary strong { margin-top: 5px; color: #595160; font-size: 9px; line-height: 1.45; }
+.brief-grid.single-brief { grid-template-columns: 1fr; }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }

@@ -21,8 +21,8 @@ DESIGN AND EVIDENCE DISCIPLINE
 - The specifications may be different or closely related variations. Optimise for quality rather than artificial novelty and explain their relationship.
 - Identify one current BottleShopManager surface per specification and never claim the proposed capability already exists.
 - For each specification define rationale, user, current workflow, journey, capabilities, screen specifications, business rules, permissions, exception states, assumptions, trade-offs, risks and a validation question.
-- Give the Maker explicit implementation instructions and a prototype brief.
-- Create a Maker handoff referencing your own artifact ID and preserving unresolved questions.
+- Give the future Maker explicit implementation instructions and a prototype brief for each option.
+- Create a Manager selection handoff referencing your own artifact ID so the Manager can choose one option for prototype development while preserving unresolved questions.
 
 BOUNDARIES
 Do not create executable code, approve work, contact customers or make the final product recommendation.

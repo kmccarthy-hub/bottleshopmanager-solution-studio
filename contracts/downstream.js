@@ -45,17 +45,31 @@ export const designerOutputSchema = {
   type: "object", additionalProperties: false,
   properties: {
     ...baseProperties("designer"), receivedHandoff: receivedHandoffSchema("researcher"), concepts: { type: "array", minItems: 3, maxItems: 3, items: conceptSchema },
-    relationshipBetweenApproaches: { type: "string" }, informationGaps: { type: "array", items: gapSchema }, makerHandoff: nextHandoffSchema("maker"), handoffSummary: { type: "string" },
+    relationshipBetweenApproaches: { type: "string" }, informationGaps: { type: "array", items: gapSchema }, managerSelectionHandoff: nextHandoffSchema("manager"), handoffSummary: { type: "string" },
   },
-  required: ["runId", "artifactId", "stage", "aiDisclosure", "featureRequestNumber", "receivedHandoff", "concepts", "relationshipBetweenApproaches", "informationGaps", "makerHandoff", "handoffSummary"],
+  required: ["runId", "artifactId", "stage", "aiDisclosure", "featureRequestNumber", "receivedHandoff", "concepts", "relationshipBetweenApproaches", "informationGaps", "managerSelectionHandoff", "handoffSummary"],
+};
+
+export const prototypeSelectionOutputSchema = {
+  type: "object", additionalProperties: false,
+  properties: {
+    ...baseProperties("prototype_selection"), receivedHandoff: receivedHandoffSchema("designer"),
+    selectedConceptId: { type: "string" }, selectedTitle: { type: "string" }, selectionRationale: { type: "string" },
+    confidence: { type: "string", enum: ["low", "medium", "high"] }, selectionCriteria: stringArray,
+    optionAssessment: { type: "array", minItems: 3, maxItems: 3, items: { type: "object", additionalProperties: false, properties: {
+      conceptId: { type: "string" }, title: { type: "string" }, status: { type: "string", enum: ["selected_for_prototyping", "not_selected_for_prototyping"] }, reason: { type: "string" },
+    }, required: ["conceptId", "title", "status", "reason"] } },
+    makerHandoff: nextHandoffSchema("maker"), decisionBoundary: { type: "string" },
+  },
+  required: ["runId", "artifactId", "stage", "aiDisclosure", "featureRequestNumber", "receivedHandoff", "selectedConceptId", "selectedTitle", "selectionRationale", "confidence", "selectionCriteria", "optionAssessment", "makerHandoff", "decisionBoundary"],
 };
 
 export const makerOutputSchema = {
   type: "object", additionalProperties: false,
   properties: {
-    ...baseProperties("maker"), receivedHandoff: receivedHandoffSchema("designer"),
+    ...baseProperties("maker"), receivedHandoff: receivedHandoffSchema("manager"),
     prototypes: {
-      type: "array", minItems: 3, maxItems: 3,
+      type: "array", minItems: 1, maxItems: 1,
       items: {
         type: "object", additionalProperties: false,
         properties: {
@@ -81,7 +95,7 @@ export const communicatorOutputSchema = {
   properties: {
     ...baseProperties("communicator"), receivedHandoff: receivedHandoffSchema("maker"),
     optionBriefs: {
-      type: "array", minItems: 3, maxItems: 3,
+      type: "array", minItems: 1, maxItems: 1,
       items: {
         type: "object", additionalProperties: false,
         properties: {
@@ -129,18 +143,24 @@ export function validateDownstreamArtifact(stage, artifact, runId, inputs) {
   if (artifact.featureRequestNumber !== issueNumber) throw new Error(`The ${stage} did not preserve the selected feature-request number.`);
   const concepts = inputs.designer?.concepts ?? artifact.concepts ?? [];
   const conceptIds = ids(concepts, "id");
-  const predecessor = { designer: "researcher", maker: "designer", communicator: "maker", manager: "communicator" }[stage];
+  const predecessor = { designer: "researcher", prototype_selection: "designer", maker: "prototypeSelection", communicator: "maker", manager: "communicator" }[stage];
   if (predecessor && artifact.receivedHandoff?.artifactId !== inputs[predecessor]?.artifactId) throw new Error(`The ${stage} must explicitly acknowledge the validated ${predecessor} artifact ID.`);
 
   if (stage === "designer") {
     const roles = ids(artifact.concepts, "lens");
     const requiredRoles = ["recommended_approach", "alternative_approach", "variation_extended_approach"];
     if (artifact.concepts?.length !== 3 || new Set(roles).size !== 3 || !requiredRoles.every((role) => roles.includes(role))) throw new Error("The Designer must produce one recommended approach, one alternative approach and one variation or extended approach.");
-    if (artifact.makerHandoff?.artifactId !== artifact.artifactId) throw new Error("The Designer handoff must reference its own validated artifact ID.");
+    if (artifact.managerSelectionHandoff?.artifactId !== artifact.artifactId) throw new Error("The Designer handoff to the Manager selection gate must reference its own validated artifact ID.");
+  }
+  if (stage === "prototype_selection") {
+    const assessedIds = ids(artifact.optionAssessment, "conceptId");
+    if (assessedIds.length !== 3 || new Set(assessedIds).size !== 3 || assessedIds.some((id) => !conceptIds.includes(id))) throw new Error("The Manager selection gate must assess all three Designer specifications.");
+    if (!conceptIds.includes(artifact.selectedConceptId) || artifact.optionAssessment.filter((item) => item.status === "selected_for_prototyping").length !== 1 || artifact.optionAssessment.find((item) => item.status === "selected_for_prototyping")?.conceptId !== artifact.selectedConceptId) throw new Error("The Manager selection gate must select exactly one Designer specification for prototyping.");
+    if (artifact.makerHandoff?.artifactId !== artifact.artifactId) throw new Error("The Manager selection handoff must reference its own validated artifact ID.");
   }
   if (stage === "maker") {
     const prototypeIds = ids(artifact.prototypes, "conceptId");
-    if (prototypeIds.length !== 3 || new Set(prototypeIds).size !== 3 || prototypeIds.some((id) => !conceptIds.includes(id))) throw new Error("The Maker must create exactly one prototype for each Designer specification.");
+    if (prototypeIds.length !== 1 || prototypeIds[0] !== inputs.prototypeSelection?.selectedConceptId || prototypeIds.some((id) => !conceptIds.includes(id))) throw new Error("The Maker must create exactly one prototype for the Manager-selected Designer specification.");
     const baselines = getPrototypeBaselinePackage(concepts);
     const forbiddenPrototypeCode = /<\s*(?:a|iframe|object|embed|base|form)\b|<script[^>]+src\s*=|<meta[^>]+http-equiv\s*=\s*["']?refresh|\b(?:fetch|XMLHttpRequest|WebSocket|EventSource|sendBeacon|localStorage|sessionStorage|indexedDB|serviceWorker|window\.open|document\.cookie|window\.parent|window\.top|window\.opener|eval\s*\(|Function\s*\(|(?:window\.|document\.)?location\s*[.=])|https?:\/\/|javascript:/i;
     for (const prototype of artifact.prototypes) {
@@ -163,12 +183,14 @@ export function validateDownstreamArtifact(stage, artifact, runId, inputs) {
   }
   if (stage === "communicator") {
     const briefIds = ids(artifact.optionBriefs, "conceptId");
-    if (briefIds.length !== 3 || new Set(briefIds).size !== 3 || briefIds.some((id) => !conceptIds.includes(id))) throw new Error("The Communicator must brief each Designer specification exactly once.");
+    if (briefIds.length !== 1 || briefIds[0] !== inputs.prototypeSelection?.selectedConceptId) throw new Error("The Communicator must assess only the single Manager-selected Maker prototype.");
     if (artifact.managerHandoff?.artifactId !== artifact.artifactId) throw new Error("The Communicator handoff must reference its own validated artifact ID.");
   }
   if (stage === "manager") {
     const rankedIds = ids(artifact.ranking, "conceptId");
     if (rankedIds.length !== 3 || new Set(rankedIds).size !== 3 || rankedIds.some((id) => !conceptIds.includes(id))) throw new Error("The Manager must rank each Designer specification exactly once.");
     if (!conceptIds.includes(artifact.recommendedConceptId)) throw new Error("The Manager recommendation must reference one of the three Designer specifications.");
+    if (artifact.recommendedConceptId !== inputs.prototypeSelection?.selectedConceptId) throw new Error("The final Manager recommendation must explain and preserve the option it selected for prototype development.");
+    if (artifact.ranking.find((item) => item.rank === 1)?.conceptId !== inputs.prototypeSelection?.selectedConceptId) throw new Error("The Manager-selected prototype must be ranked first in the final review.");
   }
 }

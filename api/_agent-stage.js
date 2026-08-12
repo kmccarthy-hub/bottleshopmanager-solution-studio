@@ -5,6 +5,7 @@ import {
   designerOutputSchema,
   makerOutputSchema,
   managerOutputSchema,
+  prototypeSelectionOutputSchema,
   validateDownstreamArtifact,
 } from "../contracts/downstream.js";
 import { productBaselinePrompt } from "../domain/product-baseline.js";
@@ -13,12 +14,13 @@ import { isTransientServiceError, sendStageError } from "./_service-errors.js";
 
 const definitions = {
   designer: { agent: agents.designer, schema: designerOutputSchema, required: ["researcher"] },
-  maker: { agent: agents.maker, schema: makerOutputSchema, required: ["researcher", "designer"] },
-  communicator: { agent: agents.communicator, schema: communicatorOutputSchema, required: ["researcher", "designer", "maker"] },
-  manager: { agent: agents.manager, schema: managerOutputSchema, required: ["researcher", "designer", "maker", "communicator"] },
+  prototype_selection: { agent: agents.managerPrototypeSelector, schema: prototypeSelectionOutputSchema, required: ["researcher", "designer"] },
+  maker: { agent: agents.maker, schema: makerOutputSchema, required: ["researcher", "designer", "prototypeSelection"] },
+  communicator: { agent: agents.communicator, schema: communicatorOutputSchema, required: ["researcher", "prototypeSelection", "maker"] },
+  manager: { agent: agents.manager, schema: managerOutputSchema, required: ["researcher", "designer", "prototypeSelection", "maker", "communicator"] },
 };
 
-const predecessorByStage = { designer: "researcher", maker: "designer", communicator: "maker", manager: "communicator" };
+const predecessorByStage = { designer: "researcher", prototype_selection: "designer", maker: "prototypeSelection", communicator: "maker", manager: "communicator" };
 
 function setCors(request, response) {
   const origin = request.headers.origin;
@@ -50,7 +52,7 @@ export function createAgentHandler(stage) {
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
       const predecessor = predecessorByStage[stage];
       const predecessorArtifactId = artifacts[predecessor]?.artifactId;
-      const makerBaselinePackage = stage === "maker" ? `\n\nIMMUTABLE CURRENT-PAGE SOURCE PACKAGE\n${JSON.stringify(getPrototypeBaselinePackage(artifacts.designer?.concepts))}\n\nVISUAL TOKENS\n${prototypeDesignTokens}` : "";
+      const makerBaselinePackage = stage === "maker" ? `\n\nIMMUTABLE CURRENT-PAGE SOURCE PACKAGE FOR THE MANAGER-SELECTED SPECIFICATION\n${JSON.stringify(getPrototypeBaselinePackage(artifacts.designer?.concepts))}\n\nVISUAL TOKENS\n${prototypeDesignTokens}` : "";
       let repairInstruction = "";
       let lastError;
       for (let attempt = 1; attempt <= 2; attempt += 1) {
