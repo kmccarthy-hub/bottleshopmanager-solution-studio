@@ -3,12 +3,17 @@ import { validateResearcherArtifact } from "../contracts/researcher.js";
 import { validateDownstreamArtifact } from "../contracts/downstream.js";
 import { isTransientServiceError, serviceStatus } from "../api/_service-errors.js";
 import { getPrototypeBaselinePackage } from "../domain/prototype-baselines.js";
+import { extractMarketResearch } from "../api/researcher.js";
 
 assert.equal(serviceStatus(new Error('{"error":{"code":503,"status":"UNAVAILABLE"}}')), 503);
 assert.equal(isTransientServiceError(new Error("This model is currently experiencing high demand.")), true);
 assert.equal(isTransientServiceError(new Error("Every generated page must provide a complete standalone document.")), false);
 assert.equal(isTransientServiceError(new Error("Artifact validation failed: prohibited prototype capability.")), false);
 assert.equal(isTransientServiceError({ status: 503, message: "Provider unavailable" }), true);
+assert.throws(() => extractMarketResearch({ text: "Ungrounded response", candidates: [{ groundingMetadata: {} }] }), /grounded market evidence/);
+const groundedResearch = extractMarketResearch({ text: "Grounded evidence", candidates: [{ groundingMetadata: { webSearchQueries: ["example query"], groundingChunks: [{ web: { title: "Official example", uri: "https://example.invalid/help" } }] } }] }, 2);
+assert.equal(groundedResearch.receipt.sourceCount, 1);
+assert.equal(groundedResearch.receipt.groundingAttempts, 2);
 
 const selectedIssue = { number: 4, sourceUrl: "https://github.com/kmccarthy-hub/bottleshopmanager-backlog/issues/4" };
 const researcher = {

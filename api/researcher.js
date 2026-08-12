@@ -21,7 +21,7 @@ function extractModelContent(response) {
   return content;
 }
 
-function extractMarketResearch(response) {
+export function extractMarketResearch(response, groundingAttempts = 1) {
   const metadata = response.candidates?.[0]?.groundingMetadata;
   const sources = (metadata?.groundingChunks ?? [])
     .filter((chunk) => chunk.web?.uri)
@@ -33,10 +33,29 @@ function extractMarketResearch(response) {
       completedAt: new Date().toISOString(),
       searchQueries: metadata?.webSearchQueries ?? [],
       sourceCount: sources.length,
+      groundingAttempts,
       sources,
     },
     synthesis: response.text,
   };
+}
+
+async function requestGroundedMarketResearch(ai, model, selectedIssue) {
+  let lastGroundingError;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const retryInstruction = attempt === 1 ? "" : `\n\nYour previous research response contained no attributable Google Search grounding metadata. This is the final evidence attempt. Actually use Google Search now, base the response on at least two attributable official product or help-documentation pages where available, and include source-supported statements so grounding citations are returned.`;
+    const marketResponse = await ai.models.generateContent({
+      model,
+      contents: [{ role: "user", parts: [{ text: `Research current market patterns relevant to this synthetic feature request. You must use the enabled Google Search tool rather than answer only from memory. Prioritise official product pages or help documentation from comparable Irish and UK retail inventory, supplier-order or workforce software; use strong international examples when useful. Identify 2-4 workflow patterns, evidence, applicability to BottleShopManager and cautions. Include attributable citations. Do not design a final solution or make market-share claims.${retryInstruction}\n\nSELECTED LIVE REQUEST\n${JSON.stringify(selectedIssue)}\n\n${productBaselinePrompt}` }] }],
+      config: { systemInstruction: researcher.systemPrompt, tools: [{ googleSearch: {} }], maxOutputTokens: 1600 },
+    });
+    try {
+      return extractMarketResearch(marketResponse, attempt);
+    } catch (error) {
+      lastGroundingError = error;
+    }
+  }
+  throw lastGroundingError;
 }
 
 export default async function handler(request, response) {
@@ -66,12 +85,7 @@ export default async function handler(request, response) {
     if (Number(functionCall.args?.issueNumber) !== selectedIssueNumber) throw new Error("The Researcher requested a different issue from the Product Manager's selection.");
 
     const toolResult = await fetchSelectedFeatureRequest(selectedIssueNumber, researcher.name);
-    const marketResponse = await ai.models.generateContent({
-      model: process.env.GEMINI_MODEL,
-      contents: [{ role: "user", parts: [{ text: `Research current market patterns relevant to this synthetic feature request. Use Google Search. Prioritise official product pages or help documentation from comparable Irish and UK retail inventory, supplier-order or workforce software; use strong international examples when useful. Identify 2-4 workflow patterns, evidence, applicability to BottleShopManager and cautions. Do not design a final solution or make market-share claims.\n\nSELECTED LIVE REQUEST\n${JSON.stringify(toolResult.selectedIssue)}\n\n${productBaselinePrompt}` }] }],
-      config: { systemInstruction: researcher.systemPrompt, tools: [{ googleSearch: {} }] },
-    });
-    const marketResearch = extractMarketResearch(marketResponse);
+    const marketResearch = await requestGroundedMarketResearch(ai, process.env.GEMINI_MODEL, toolResult.selectedIssue);
 
     const finalModelResponse = await ai.models.generateContent({
       model: process.env.GEMINI_MODEL,
