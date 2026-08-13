@@ -18,6 +18,7 @@ export function serviceStatus(error) {
 
 export function isTransientServiceError(error) {
   const message = errorMessage(error);
+  if (error?.code === "AI_STAGE_DEADLINE") return true;
   if (/validation|schema|invalid json|unexpected token|must preserve|must provide|must create|must identify|must assess|must select|must rank|prohibited|invented|did not preserve|did not return/i.test(message)) return false;
   const directCode = Number(error?.status ?? error?.code ?? error?.error?.code);
   if (Number.isInteger(directCode)) return transientCodes.has(directCode);
@@ -25,17 +26,21 @@ export function isTransientServiceError(error) {
   return /RESOURCE_EXHAUSTED|UNAVAILABLE|high demand|temporar(?:y|ily unavailable)|rate limit|FUNCTION_INVOCATION_TIMEOUT|timed?\s*out|ECONNRESET|ETIMEDOUT/i.test(message);
 }
 
-export function sendStageError(response, stage, runId, error) {
+export function sendStageError(response, stage, runId, error, timingDiagnostics) {
   const transient = isTransientServiceError(error);
+  const controlledTimeout = error?.code === "AI_STAGE_DEADLINE";
   const role = `${stage.slice(0, 1).toUpperCase()}${stage.slice(1)}`;
   if (transient) {
     response.setHeader("Retry-After", "4");
     return response.status(serviceStatus(error) === 429 ? 429 : 503).json({
       runId,
       stage,
-      retryable: true,
-      error: `${role} could not reach the AI service because it is temporarily busy. Solution Studio will retry this stage automatically.`,
-      diagnosticCode: serviceStatus(error),
+      retryable: !controlledTimeout,
+      error: controlledTimeout
+        ? `${role} reached its controlled AI processing limit. No partial output was accepted; start a new run when ready.`
+        : `${role} could not reach the AI service because it is temporarily busy. Solution Studio will retry this stage automatically.`,
+      diagnosticCode: controlledTimeout ? "AI_STAGE_DEADLINE" : serviceStatus(error),
+      timingDiagnostics,
       aiDisclosure: "No completed AI artefact was produced for this attempt.",
     });
   }
@@ -44,6 +49,7 @@ export function sendStageError(response, stage, runId, error) {
     stage,
     retryable: false,
     error: errorMessage(error) || `The ${role} stage failed.`,
+    timingDiagnostics,
     aiDisclosure: "No completed AI recommendation was produced.",
   });
 }

@@ -6,6 +6,7 @@ import { stageRepairGuidance } from "../api/_stage-repair.js";
 import { getPrototypeBaselinePackage } from "../domain/prototype-baselines.js";
 import { extractMarketResearch } from "../api/researcher.js";
 import { sortIssuesByNumber } from "../api/_github-backlog.js";
+import { createStageTiming } from "../api/_stage-timing.js";
 
 assert.equal(serviceStatus(new Error('{"error":{"code":503,"status":"UNAVAILABLE"}}')), 503);
 assert.equal(isTransientServiceError(new Error("This model is currently experiencing high demand.")), true);
@@ -28,6 +29,13 @@ assert.equal(groundedResearch.receipt.searchCallCount, 1);
 assert.equal(groundedResearch.receipt.interactionId, "interaction-grounded");
 assert.equal(groundedResearch.receipt.groundingAttempts, 2);
 assert.deepEqual(sortIssuesByNumber([{ number: 2 }, { number: 1 }, { number: 11 }, { number: 3 }]).map((issue) => issue.number), [1, 2, 3, 11]);
+const timing = createStageTiming("maker", "timing-contract-run");
+const measuredTimeout = await timing.measure("contract_test", 1, async (timeoutMs) => timeoutMs);
+assert.ok(measuredTimeout > 200_000 && measuredTimeout <= 210_000);
+const timingDiagnostics = timing.finish("complete");
+assert.equal(timingDiagnostics.outcome, "complete");
+assert.equal(timingDiagnostics.calls.length, 1);
+assert.equal(timingDiagnostics.calls[0].outcome, "complete");
 
 const selectedIssue = { number: 4, sourceUrl: "https://github.com/kmccarthy-hub/bottleshopmanager-backlog/issues/4" };
 const researcher = {

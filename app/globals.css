@@ -834,7 +834,7 @@ footer {
 .pipeline-node > span:nth-child(2) strong { font-size: 12px; }
 .pipeline-node > span:nth-child(2) small { margin-top: 3px; color: var(--muted); font-size: 9px; }
 .pipeline-node p { grid-column: 1 / -1; margin: 0; color: #625b6a; font-size: 10px; line-height: 1.45; }
-.stage-status { align-self: start; justify-self: start; grid-column: 1 / -1; min-height: 22px; display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 999px; background: rgba(111,104,119,.09); color: var(--muted); font-size: 8px; font-weight: 850; text-transform: uppercase; }
+.stage-status { align-self: start; justify-self: start; grid-column: 1 / -1; min-height: 22px; display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 999px; background: rgba(111,104,119,.09); color: var(--muted); font-size: 8px; font-weight: 850; text-transform: uppercase; white-space: nowrap; }
 .stage-status.status-running { background: rgba(216,154,44,.16); color: #845b0a; }
 .stage-status.status-complete { background: rgba(22,143,157,.14); color: #08717c; }
 .stage-status.status-error { background: rgba(239,104,69,.15); color: #a43d24; }

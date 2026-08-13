@@ -12,6 +12,7 @@ import { productBaselinePrompt } from "../domain/product-baseline.js";
 import { getPrototypeBaselinePackage, prototypeDesignTokens } from "../domain/prototype-baselines.js";
 import { isTransientServiceError, sendStageError } from "./_service-errors.js";
 import { stageRepairGuidance } from "./_stage-repair.js";
+import { createStageTiming } from "./_stage-timing.js";
 
 const definitions = {
   designer: { agent: agents.designer, schema: designerOutputSchema, required: ["researcher"] },
@@ -49,6 +50,7 @@ export function createAgentHandler(stage) {
       return response.status(400).json({ error: `The ${stage} stage is missing a required upstream artefact.` });
     }
 
+    const timing = createStageTiming(stage, runId);
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
       const predecessor = predecessorByStage[stage];
@@ -58,7 +60,7 @@ export function createAgentHandler(stage) {
       let lastError;
       for (let attempt = 1; attempt <= 2; attempt += 1) {
         try {
-          const result = await ai.models.generateContent({
+          const result = await timing.measure("generate_validated_artifact", attempt, (timeoutMs) => ai.models.generateContent({
             model: process.env.GEMINI_MODEL,
             contents: [{
               role: "user",
@@ -68,15 +70,16 @@ export function createAgentHandler(stage) {
               systemInstruction: definition.agent.systemPrompt,
               responseMimeType: "application/json",
               responseJsonSchema: definition.schema,
+              httpOptions: { timeout: timeoutMs },
             },
-          });
+          }));
           const artifact = JSON.parse(result.text);
           try {
             validateDownstreamArtifact(stage, artifact, runId, artifacts);
           } catch (validationError) {
             throw new Error(`Artifact validation failed: ${validationError instanceof Error ? validationError.message : "invalid structured output"}`);
           }
-          return response.status(200).json({ runId, stage, validationAttempts: attempt, aiDisclosure: "AI-generated analysis - verify before use", artifact });
+          return response.status(200).json({ runId, stage, validationAttempts: attempt, timingDiagnostics: timing.finish("complete"), aiDisclosure: "AI-generated analysis - verify before use", artifact });
         } catch (error) {
           if (isTransientServiceError(error)) throw error;
           lastError = error;
@@ -87,7 +90,7 @@ export function createAgentHandler(stage) {
       }
       throw lastError;
     } catch (error) {
-      return sendStageError(response, stage, runId, error);
+      return sendStageError(response, stage, runId, error, timing.finish("error"));
     }
   };
 }

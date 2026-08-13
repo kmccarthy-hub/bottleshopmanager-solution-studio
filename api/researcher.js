@@ -4,6 +4,7 @@ import { researcherOutputSchema, validateResearcherArtifact } from "../contracts
 import { productBaselinePrompt } from "../domain/product-baseline.js";
 import { fetchSelectedFeatureRequest, setCors } from "./_github-backlog.js";
 import { sendStageError } from "./_service-errors.js";
+import { createStageTiming } from "./_stage-timing.js";
 
 const backlogTool = {
   name: "fetch_selected_feature_request",
@@ -49,18 +50,18 @@ export function extractMarketResearch(interaction, groundingAttempts = 1) {
   };
 }
 
-async function requestGroundedMarketResearch(ai, model, selectedIssue) {
+async function requestGroundedMarketResearch(ai, model, selectedIssue, timing) {
   let lastGroundingError;
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     const retryInstruction = attempt === 1 ? "" : " Your previous response did not include an observable Search call and URL citations, so search before answering this final attempt.";
-    const interaction = await ai.interactions.create({
+    const interaction = await timing.measure("grounded_market_research", attempt, (timeoutMs) => ai.interactions.create({
       model,
       input: `Search the web and research current market patterns relevant to this synthetic feature request. Prioritise official product pages or help documentation from comparable Irish and UK retail inventory, supplier-order or workforce software; use strong international examples when useful. Identify 2-4 workflow patterns, the supporting evidence, applicability to BottleShopManager and cautions. Include attributable citations for every market pattern. Do not design a final solution or make market-share claims.${retryInstruction}\n\nSELECTED LIVE REQUEST\n${JSON.stringify(selectedIssue)}\n\n${productBaselinePrompt}`,
       system_instruction: "You are the live market-evidence retrieval substage for a product Researcher. The selected GitHub request has already been fetched and is included in the input. Use the available Google Search tool once as needed, return a concise cited synthesis and avoid unsupported facts. Do not call or discuss the GitHub tool and do not design solutions.",
       tools: [{ type: "google_search", search_types: ["web_search"] }],
       generation_config: { max_output_tokens: 1600, thinking_level: "low", tool_choice: "auto" },
       store: false,
-    });
+    }, { timeout: timeoutMs }));
     try {
       return extractMarketResearch(interaction, attempt);
     } catch (error) {
@@ -79,27 +80,29 @@ export default async function handler(request, response) {
   const selectedIssueNumber = Number(request.body?.featureRequestNumber);
   if (!Number.isInteger(selectedIssueNumber) || selectedIssueNumber < 1) return response.status(400).json({ error: "Select a valid live backlog request before starting." });
   const runId = crypto.randomUUID();
+  const timing = createStageTiming("researcher", runId);
 
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     const initialUserTurn = { role: "user", parts: [{ text: `Begin BottleShopManager Solution Studio run ${runId}. The Product Manager selected live backlog issue #${selectedIssueNumber}. Call the mandatory GitHub tool for exactly that issue. Do not design solutions.` }] };
-    const toolRequest = await ai.models.generateContent({
+    const toolRequest = await timing.measure("request_live_backlog_tool", 1, (timeoutMs) => ai.models.generateContent({
       model: process.env.GEMINI_MODEL,
       contents: [initialUserTurn],
       config: {
         systemInstruction: researcher.systemPrompt,
         tools: [{ functionDeclarations: [backlogTool] }],
         toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.ANY, allowedFunctionNames: [backlogTool.name] } },
+        httpOptions: { timeout: timeoutMs },
       },
-    });
+    }));
     const functionCall = toolRequest.functionCalls?.find((call) => call.name === backlogTool.name);
     if (!functionCall) throw new Error("The Researcher did not request the mandatory live backlog tool.");
     if (Number(functionCall.args?.issueNumber) !== selectedIssueNumber) throw new Error("The Researcher requested a different issue from the Product Manager's selection.");
 
     const toolResult = await fetchSelectedFeatureRequest(selectedIssueNumber, researcher.name);
-    const marketResearch = await requestGroundedMarketResearch(ai, process.env.GEMINI_MODEL, toolResult.selectedIssue);
+    const marketResearch = await requestGroundedMarketResearch(ai, process.env.GEMINI_MODEL, toolResult.selectedIssue, timing);
 
-    const finalModelResponse = await ai.models.generateContent({
+    const finalModelResponse = await timing.measure("synthesise_research_brief", 1, (timeoutMs) => ai.models.generateContent({
       model: process.env.GEMINI_MODEL,
       contents: [
         initialUserTurn,
@@ -115,16 +118,17 @@ export default async function handler(request, response) {
         responseJsonSchema: researcherOutputSchema,
         tools: [{ functionDeclarations: [backlogTool] }],
         toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.NONE } },
+        httpOptions: { timeout: timeoutMs },
       },
-    });
+    }));
     const artifact = JSON.parse(finalModelResponse.text);
     validateResearcherArtifact(artifact, toolResult.selectedIssue, runId, toolResult.receipt.id, marketResearch.receipt.id);
     return response.status(200).json({
       runId, stage: "researcher", aiDisclosure: "AI-generated analysis - verify before use",
       toolCall: { id: functionCall.id ?? null, name: functionCall.name, arguments: functionCall.args ?? {}, requestedBy: researcher.name },
-      toolReceipt: toolResult.receipt, marketResearchReceipt: marketResearch.receipt, artifact,
+      toolReceipt: toolResult.receipt, marketResearchReceipt: marketResearch.receipt, timingDiagnostics: timing.finish("complete"), artifact,
     });
   } catch (error) {
-    return sendStageError(response, "researcher", runId, error);
+    return sendStageError(response, "researcher", runId, error, timing.finish("error"));
   }
 }

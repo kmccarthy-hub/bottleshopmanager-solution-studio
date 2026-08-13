@@ -39,6 +39,9 @@ export default function Home() {
   const [backlogError, setBacklogError] = useState("");
   const [selectedNumber, setSelectedNumber] = useState<number | null>(null);
   const [statuses, setStatuses] = useState(initialStatuses);
+  const [runningStageKey, setRunningStageKey] = useState<StageKey | null>(null);
+  const [stageStartedAt, setStageStartedAt] = useState<number | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [activeStage, setActiveStage] = useState(0);
   const [artifacts, setArtifacts] = useState<Artifacts>({});
   const [toolReceipt, setToolReceipt] = useState<{ completedAt: string; responseStatus: number; selectedIssueNumber: number; backlogIssueCount: number; returnedCommentCount: number } | null>(null);
@@ -68,7 +71,25 @@ export default function Home() {
     return () => { cancelled = true; };
   }, [apiBaseUrl]);
 
-  function setStageStatus(key: StageKey, status: StageStatus) { setStatuses((current) => ({ ...current, [key]: status })); }
+  useEffect(() => {
+    if (!runningStageKey || stageStartedAt === null) return;
+    const updateElapsed = () => setElapsedSeconds(Math.max(0, Math.floor((Date.now() - stageStartedAt) / 1000)));
+    updateElapsed();
+    const timer = window.setInterval(updateElapsed, 1000);
+    return () => window.clearInterval(timer);
+  }, [runningStageKey, stageStartedAt]);
+
+  function setStageStatus(key: StageKey, status: StageStatus) {
+    setStatuses((current) => ({ ...current, [key]: status }));
+    if (status === "running") {
+      setRunningStageKey(key);
+      setStageStartedAt(Date.now());
+      setElapsedSeconds(0);
+    } else {
+      setRunningStageKey(null);
+      setStageStartedAt(null);
+    }
+  }
 
   function followStage(index: number) {
     if (followRunRef.current) setActiveStage(index);
@@ -109,7 +130,7 @@ export default function Home() {
   async function exploreSolutions() {
     if (!apiBaseUrl || !selectedNumber) return;
     followRunRef.current = true;
-    setRunError(""); setRunErrorStage(null); setRetryNotice(""); setArtifacts({}); setStatuses(initialStatuses); setToolReceipt(null); setMarketResearchReceipt(null); setPrototypeId("");
+    setRunError(""); setRunErrorStage(null); setRetryNotice(""); setArtifacts({}); setStatuses(initialStatuses); setRunningStageKey(null); setStageStartedAt(null); setElapsedSeconds(0); setToolReceipt(null); setMarketResearchReceipt(null); setPrototypeId("");
     window.requestAnimationFrame(() => pipelineRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
     let currentStage: StageKey = "researcher";
     try {
@@ -177,7 +198,7 @@ export default function Home() {
     <section className="pipeline-section" id="pipeline" ref={pipelineRef}>
       <div className="section-heading"><div><p className="eyebrow"><span /> Governed handoffs</p><h2>Five agents. Three designs. One prototype.</h2></div><p>The Researcher combines the live backlog request, current platform and market evidence. The Designer creates three options; the Manager selects one for prototyping; the Maker builds it; the Communicator explains its impact and effort; and the Manager completes the final three-option review.</p></div>
       <div className="studio-pipeline">
-        {stages.map((item, index) => <button key={item.key} type="button" className={`pipeline-node ${index === activeStage ? "active" : ""}`} onClick={() => selectStage(index)} aria-pressed={index === activeStage}><span className={`stage-orb ${item.accent}`}>{item.number}</span><span><strong>{item.role}</strong><small>{item.name}</small></span><span className={`stage-status status-${statuses[item.key]}`}>{statuses[item.key] === "running" && <span className="stage-throbber" aria-hidden="true" />}{statuses[item.key] === "idle" ? "waiting" : statuses[item.key]}</span><p>{item.output}</p></button>)}
+        {stages.map((item, index) => <button key={item.key} type="button" className={`pipeline-node ${index === activeStage ? "active" : ""}`} onClick={() => selectStage(index)} aria-pressed={index === activeStage}><span className={`stage-orb ${item.accent}`}>{item.number}</span><span><strong>{item.role}</strong><small>{item.name}</small></span><span className={`stage-status status-${statuses[item.key]}`}>{statuses[item.key] === "running" && <span className="stage-throbber" aria-hidden="true" />}{statuses[item.key] === "running" ? `Working for ${item.key === runningStageKey ? elapsedSeconds : 0} seconds` : statuses[item.key] === "idle" ? "waiting" : statuses[item.key]}</span><p>{item.output}</p></button>)}
       </div>
       <div className="pipeline-boundary"><div><strong>{stages[activeStage].role}</strong><span>AI-generated · verify before use</span></div><p>{activeArtifact?.receivedHandoff ? `Received ${activeArtifact.receivedHandoff.from} artifact ${activeArtifact.receivedHandoff.artifactId}; produced ${activeArtifact.artifactId}.` : activeArtifact ? `Produced Researcher artifact ${activeArtifact.artifactId} for the Designer handoff.` : activeStage === 4 ? "Provides an advisory recommendation and backlog-improvement questions. The Product Manager retains the final decision." : "Cannot approve work, change the backlog or bypass the next evidence handoff."}</p></div>
       <div className="agent-output-workspace" aria-live="polite">
@@ -192,7 +213,7 @@ export default function Home() {
         </div>
         {retryNotice && activeStatus === "running" && <div className="agent-run-notice" role="status"><span className="stage-throbber" aria-hidden="true" /><p><strong>Temporary AI demand</strong>{retryNotice}</p></div>}
 
-        {!activeHasOutput && <div className={`agent-output-placeholder placeholder-${activeStatus}`}><span className={activeStatus === "running" ? "stage-throbber large" : "waiting-orb"} aria-hidden="true" /><div><strong>{activeStatus === "running" ? `${stages[activeStage].role} is working` : activeStatus === "error" ? `${stages[activeStage].role} could not complete` : `${stages[activeStage].role} is waiting`}</strong><p>{activeStatus === "running" ? "The agent is processing its governed handoff. Its output will appear here when complete." : activeStatus === "error" ? (activeStageKey === runErrorStage && runError ? runError : "Run the selected request again to retry this stage.") : "This agent will begin after it receives the required output from the previous stage."}</p></div></div>}
+        {!activeHasOutput && <div className={`agent-output-placeholder placeholder-${activeStatus}`}><span className={activeStatus === "running" ? "stage-throbber large" : "waiting-orb"} aria-hidden="true" /><div><strong>{activeStatus === "running" ? `${stages[activeStage].role} is working` : activeStatus === "error" ? `${stages[activeStage].role} could not complete` : `${stages[activeStage].role} is waiting`}</strong><p>{activeStatus === "running" ? "The agent is processing its governed handoff. Longer prototype work can take several minutes; its output will appear here when complete." : activeStatus === "error" ? (activeStageKey === runErrorStage && runError ? runError : "Run the selected request again to retry this stage.") : "This agent will begin after it receives the required output from the previous stage."}</p></div></div>}
 
       {activeStageKey === "researcher" && artifacts.researcher && <>
       <div className="research-grid">
