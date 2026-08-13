@@ -82,7 +82,7 @@ export const makerOutputSchema = {
           modifications: { type: "array", minItems: 1, maxItems: 6, items: { type: "object", additionalProperties: false, properties: {
             id: { type: "string", description: "A lowercase kebab-case identifier, for example stock-alert." }, targetAnchor: { type: "string" }, placement: { type: "string", enum: ["before", "after", "prepend", "append"] }, purpose: { type: "string" }, html: { type: "string" },
           }, required: ["id", "targetAnchor", "placement", "purpose", "html"] } },
-          prototypeCss: { type: "string" }, prototypeScript: { type: "string" }, interactionSummary: { type: "string" }, interactiveStates: { type: "array", minItems: 2, items: { type: "string" } },
+          prototypeCss: { type: "string", description: "Required complete non-empty CSS, 80-12000 characters, scoped only to generated prototype elements. Never return an empty string." }, prototypeScript: { type: "string" }, interactionSummary: { type: "string" }, interactiveStates: { type: "array", minItems: 2, items: { type: "string" } },
           limitations: stringArray, humanTestPrompts: stringArray,
         },
         required: ["conceptId", "title", "purpose", "baselineSurface", "baselineSourceId", "baselineAnchorsPreserved", "currentWorkflow", "proposedWorkflow", "testableAssumption", "implementedDesignElements", "omittedDesignElements", "designTraceability", "changeHighlights", "modifications", "prototypeCss", "prototypeScript", "interactionSummary", "interactiveStates", "limitations", "humanTestPrompts"],

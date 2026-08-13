@@ -45,3 +45,14 @@ export function stageRepairGuidance(stage, error) {
 
   return ` Safety rules override any conflicting upstream implementation instruction. Remove the blocked token ${JSON.stringify(blockedToken)} and the capability it represents. Replace it with a local type=button interaction that changes only generated prototype elements and data-state values.`;
 }
+
+export function stageRepairUserMessage(stage, error) {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  if (stage !== "maker") return "The agent's draft did not pass its output checks and is being revised.";
+  if (/Maker CSS length\s+0\s+is outside/i.test(message)) return "The Maker draft did not include the required scoped styling. Maker is revising the same prototype rather than starting over.";
+  if (/Maker CSS length\s+\d+\s+is outside/i.test(message)) return "The Maker draft's scoped styling was incomplete or too large. Maker is revising that styling while preserving the rest of the prototype.";
+  if (/CSS contains unscoped or baseline selector/i.test(message)) return "The Maker draft tried to style part of the locked current platform. Maker is restricting the styling to generated prototype elements only.";
+  if (/data-prototype-element|modification ID|HTML length|HTML root/i.test(message)) return "One generated page addition did not meet the renderer's isolation contract. Maker is correcting that addition while preserving the valid work.";
+  if (/blocked token|prohibited capability|inline executable/i.test(message)) return "The Maker draft requested a capability that isolated prototypes cannot use. Maker is replacing it with a safe local interaction.";
+  return "The Maker draft did not pass a prototype validation check. Maker is revising the same draft while preserving fields that already passed.";
+}

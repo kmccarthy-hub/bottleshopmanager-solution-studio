@@ -13,9 +13,12 @@ function diagnosticMessage(error) {
   return "Unknown AI service error.";
 }
 
-export function createStageTiming(stage, runId) {
+export function createStageTiming(stage, runId, options = {}) {
   const startedAtMs = Date.now();
-  const deadlineMs = boundedDeadline(process.env.AI_STAGE_DEADLINE_MS);
+  const requestedDeadline = Number(options.deadlineMs);
+  const deadlineMs = options.deadlineMs === undefined
+    ? boundedDeadline(process.env.AI_STAGE_DEADLINE_MS)
+    : Math.min(Math.max(Number.isFinite(requestedDeadline) ? Math.round(requestedDeadline) : 0, 0), DEFAULT_STAGE_DEADLINE_MS);
   const calls = [];
 
   function elapsedMs() {

@@ -841,6 +841,10 @@ footer {
 .stage-throbber { width: 10px; height: 10px; flex: 0 0 auto; border: 2px solid rgba(132,91,10,.24); border-top-color: currentColor; border-radius: 50%; animation: stage-throbber-spin .8s linear infinite; }
 .stage-throbber.large { width: 22px; height: 22px; border-width: 3px; }
 @keyframes stage-throbber-spin { to { transform: rotate(360deg); } }
+.agent-repair-banner { margin-top: 14px; display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border: 1px solid rgba(216,154,44,.28); border-radius: 13px; background: linear-gradient(105deg, rgba(255,247,226,.95), rgba(246,240,255,.92)); color: #5c4616; }
+.agent-repair-banner .stage-throbber { margin-top: 2px; }
+.agent-repair-banner strong { display: block; color: #3e2d08; font-size: 12px; }
+.agent-repair-banner p { margin: 4px 0 0; color: #715d30; font-size: 10px; line-height: 1.5; }
 .pipeline-boundary { display: flex; align-items: center; justify-content: space-between; gap: 40px; margin-top: 18px; padding: 16px 18px; border-left: 3px solid var(--coral); border-radius: 0 10px 10px 0; background: rgba(239,104,69,.055); }
 .pipeline-boundary strong, .pipeline-boundary span { display: block; }
 .pipeline-boundary strong { font-size: 12px; }

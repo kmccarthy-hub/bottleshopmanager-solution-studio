@@ -49,6 +49,7 @@ export default function Home() {
   const [runError, setRunError] = useState("");
   const [runErrorStage, setRunErrorStage] = useState<StageKey | null>(null);
   const [retryNotice, setRetryNotice] = useState("");
+  const [repairNotice, setRepairNotice] = useState<{ stage: StageKey; attempt: number; maxAttempts: number; reason: string } | null>(null);
   const [prototypeId, setPrototypeId] = useState("");
   const pipelineRef = useRef<HTMLElement | null>(null);
   const followRunRef = useRef(true);
@@ -103,15 +104,23 @@ export default function Home() {
   async function postStage(key: StageKey | "prototype-selection", body: object) {
     const roleLabel = key === "prototype-selection" ? "Manager selection gate" : stages.find((stage) => stage.key === key)?.role ?? key;
     const retryDelays = [0, 5000, 12000, 20000];
+    let requestBody = body;
     for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
       if (retryDelays[attempt]) {
         setRetryNotice(`${roleLabel} AI service is busy. Automatic retry ${attempt} of ${retryDelays.length - 1}…`);
         await new Promise((resolve) => window.setTimeout(resolve, retryDelays[attempt]));
       }
       try {
-        const response = await fetch(`${apiBaseUrl}/api/${key}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+        const response = await fetch(`${apiBaseUrl}/api/${key}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(requestBody) });
         const payload = await response.json().catch(() => ({ error: `${key} returned an unreadable response.`, retryable: [502, 503, 504].includes(response.status) }));
-        if (response.ok) { setRetryNotice(""); return payload; }
+        if (response.ok) { setRetryNotice(""); setRepairNotice(null); return payload; }
+        if (key === "maker" && response.status === 422 && payload.repairable && payload.repairToken) {
+          setRetryNotice("");
+          setRepairNotice({ stage: "maker", attempt: payload.nextAttempt, maxAttempts: payload.maxAttempts, reason: payload.repairReason });
+          requestBody = { ...body, repairToken: payload.repairToken };
+          attempt -= 1;
+          continue;
+        }
         if (!payload.retryable) { setRetryNotice(""); throw new Error(payload.error ?? `${key} could not complete.`); }
         if (attempt === retryDelays.length - 1) { setRetryNotice(""); throw new Error(`${roleLabel} could not reach the AI service after ${retryDelays.length} attempts. Please wait a few minutes and run the request again.`); }
       } catch (error) {
@@ -130,7 +139,7 @@ export default function Home() {
   async function exploreSolutions() {
     if (!apiBaseUrl || !selectedNumber) return;
     followRunRef.current = true;
-    setRunError(""); setRunErrorStage(null); setRetryNotice(""); setArtifacts({}); setStatuses(initialStatuses); setRunningStageKey(null); setStageStartedAt(null); setElapsedSeconds(0); setToolReceipt(null); setMarketResearchReceipt(null); setPrototypeId("");
+    setRunError(""); setRunErrorStage(null); setRetryNotice(""); setRepairNotice(null); setArtifacts({}); setStatuses(initialStatuses); setRunningStageKey(null); setStageStartedAt(null); setElapsedSeconds(0); setToolReceipt(null); setMarketResearchReceipt(null); setPrototypeId("");
     window.requestAnimationFrame(() => pipelineRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
     let currentStage: StageKey = "researcher";
     try {
@@ -200,6 +209,7 @@ export default function Home() {
       <div className="studio-pipeline">
         {stages.map((item, index) => <button key={item.key} type="button" className={`pipeline-node ${index === activeStage ? "active" : ""}`} onClick={() => selectStage(index)} aria-pressed={index === activeStage}><span className={`stage-orb ${item.accent}`}>{item.number}</span><span><strong>{item.role}</strong><small>{item.name}</small></span><span className={`stage-status status-${statuses[item.key]}`}>{statuses[item.key] === "running" && <span className="stage-throbber" aria-hidden="true" />}{statuses[item.key] === "running" ? `Working for ${item.key === runningStageKey ? elapsedSeconds : 0} seconds` : statuses[item.key] === "idle" ? "waiting" : statuses[item.key]}</span><p>{item.output}</p></button>)}
       </div>
+      {repairNotice && statuses[repairNotice.stage] === "running" && <div className="agent-repair-banner" role="status"><span className="stage-throbber" aria-hidden="true" /><div><strong>Maker is revising its draft · attempt {repairNotice.attempt} of {repairNotice.maxAttempts}</strong><p>{repairNotice.reason}</p></div></div>}
       <div className="pipeline-boundary"><div><strong>{stages[activeStage].role}</strong><span>AI-generated · verify before use</span></div><p>{activeArtifact?.receivedHandoff ? `Received ${activeArtifact.receivedHandoff.from} artifact ${activeArtifact.receivedHandoff.artifactId}; produced ${activeArtifact.artifactId}.` : activeArtifact ? `Produced Researcher artifact ${activeArtifact.artifactId} for the Designer handoff.` : activeStage === 4 ? "Provides an advisory recommendation and backlog-improvement questions. The Product Manager retains the final decision." : "Cannot approve work, change the backlog or bypass the next evidence handoff."}</p></div>
       <div className="agent-output-workspace" aria-live="polite">
         <div className="agent-request-context">
