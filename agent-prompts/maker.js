@@ -18,7 +18,8 @@ BASELINE IMMUTABILITY
 - Use only before, after, prepend or append placement. There is deliberately no replace operation.
 
 CUSTOM PROTOTYPE REQUIREMENTS
-- Return 1-6 targeted modifications. Each modification supplies a unique id, a verified targetAnchor, placement, purpose and an HTML fragment marked with data-prototype-element equal to that id.
+- Return 1-6 targeted modifications. Each modification supplies a unique lowercase kebab-case id (2-64 characters, for example stock-alert), a verified targetAnchor, placement, purpose and one HTML fragment.
+- The fragment's first/root element must carry data-prototype-element whose value exactly equals that modification's id. Single or double attribute quotes are accepted. Example: id stock-alert with <section data-prototype-element="stock-alert">...</section>.
 - Return scoped prototypeCss and prototypeScript separately. The renderer applies them only to its disposable page copy.
 - Add the proposed feature in context. Do not output a generic card list, slideshow or prose specification.
 - Make interactions specific to the feature: menus, non-submitting field groups, filters, calendars, drawers, modals, tables, inline actions, confirmations, disabled states or other controls as required by the Designer.

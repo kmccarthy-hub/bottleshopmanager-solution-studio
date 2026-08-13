@@ -80,7 +80,7 @@ export const makerOutputSchema = {
           implementedDesignElements: stringArray, omittedDesignElements: stringArray, designTraceability: { type: "string" },
           changeHighlights: { type: "array", minItems: 3, maxItems: 3, items: { type: "string" } },
           modifications: { type: "array", minItems: 1, maxItems: 6, items: { type: "object", additionalProperties: false, properties: {
-            id: { type: "string" }, targetAnchor: { type: "string" }, placement: { type: "string", enum: ["before", "after", "prepend", "append"] }, purpose: { type: "string" }, html: { type: "string" },
+            id: { type: "string", description: "A lowercase kebab-case identifier, for example stock-alert." }, targetAnchor: { type: "string" }, placement: { type: "string", enum: ["before", "after", "prepend", "append"] }, purpose: { type: "string" }, html: { type: "string" },
           }, required: ["id", "targetAnchor", "placement", "purpose", "html"] } },
           prototypeCss: { type: "string" }, prototypeScript: { type: "string" }, interactionSummary: { type: "string" }, interactiveStates: { type: "array", minItems: 2, items: { type: "string" } },
           limitations: stringArray, humanTestPrompts: stringArray,
@@ -177,8 +177,15 @@ export function validateDownstreamArtifact(stage, artifact, runId, inputs) {
       const modificationIds = ids(prototype.modifications, "id");
       if (!prototype.modifications?.length || new Set(modificationIds).size !== modificationIds.length) throw new Error("Every Maker prototype must provide uniquely identified page modifications.");
       for (const modification of prototype.modifications) {
+        if (!/^[a-z][a-z0-9-]{1,63}$/.test(modification.id ?? "")) throw new Error(`Maker modification ID ${JSON.stringify(modification.id)} must be 2-64 characters of lowercase kebab-case beginning with a letter.`);
         if (!baseline.anchors.includes(modification.targetAnchor)) throw new Error(`The Maker targeted an unknown baseline anchor: ${modification.targetAnchor}.`);
-        if (modification.html?.length < 80 || modification.html.length > 8000 || !modification.html.includes(`data-prototype-element="${modification.id}"`)) throw new Error("Every Maker modification must provide a bounded HTML fragment marked with its matching data-prototype-element ID.");
+        const modificationHtmlLength = modification.html?.length ?? 0;
+        if (modificationHtmlLength < 80 || modificationHtmlLength > 8000) throw new Error(`Maker modification ${JSON.stringify(modification.id)} HTML length ${modificationHtmlLength} is outside the permitted 80-8000 character range.`);
+        const rootTag = modification.html.match(/^\s*<([a-z][a-z0-9-]*)\b([^>]*)>/i);
+        if (!rootTag) throw new Error(`Maker modification ${JSON.stringify(modification.id)} must begin with one HTML root element.`);
+        const rootMarker = rootTag[2].match(/\bdata-prototype-element\s*=\s*(["'])([^"']+)\1/i)?.[2];
+        if (!rootMarker) throw new Error(`Maker modification ${JSON.stringify(modification.id)} must put data-prototype-element=${JSON.stringify(modification.id)} on its HTML root element.`);
+        if (rootMarker !== modification.id) throw new Error(`Maker modification ${JSON.stringify(modification.id)} has root data-prototype-element ${JSON.stringify(rootMarker)}; it must exactly match the modification ID.`);
         const blockedMarkup = modification.html.match(forbiddenPrototypeMarkup)?.[0];
         if (blockedMarkup) throw new Error(`Generated prototype markup contains blocked token ${JSON.stringify(blockedMarkup.slice(0, 48))}. Use non-submitting controls in html, prototypeCss for styling and prototypeScript for behaviour.`);
       }

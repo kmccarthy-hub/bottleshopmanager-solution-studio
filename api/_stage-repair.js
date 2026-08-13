@@ -11,6 +11,31 @@ export function stageRepairGuidance(stage, error) {
     return " Rewrite prototypeCss as a complete, non-empty set of scoped rules between 80 and 12000 characters. Every selector must begin with the matching [data-prototype-element=\"modification-id\"] root or a unique .prototype- class.";
   }
 
+  const unsafeModificationId = message.match(/Maker modification ID\s+(["'][^"']*["'])\s+must be/i)?.[1];
+  if (unsafeModificationId) {
+    return ` Replace the rejected modification id ${unsafeModificationId} with a unique lowercase kebab-case id between 2 and 64 characters, beginning with a letter. Use that new exact value on the HTML root element's data-prototype-element attribute and in all matching scoped CSS and JavaScript selectors.`;
+  }
+
+  const htmlLength = message.match(/Maker modification\s+(["'][^"']+["'])\s+HTML length\s+(\d+)\s+is outside/i);
+  if (htmlLength) {
+    return ` Rewrite only modification ${htmlLength[1]} as one complete HTML fragment between 80 and 8000 characters. Its first element must carry data-prototype-element equal to the modification id. Keep styling and behaviour in prototypeCss and prototypeScript.`;
+  }
+
+  const missingRoot = message.match(/Maker modification\s+(["'][^"']+["'])\s+must begin with one HTML root element/i);
+  if (missingRoot) {
+    return ` Rewrite modification ${missingRoot[1]} so its html begins immediately with one allowed HTML root element. Put data-prototype-element equal to the modification id on that first element; do not begin with prose, Markdown, CSS or JavaScript.`;
+  }
+
+  const missingMarker = message.match(/Maker modification\s+(["'][^"']+["'])\s+must put data-prototype-element=/i);
+  if (missingMarker) {
+    return ` Add data-prototype-element=${missingMarker[1]} to the first/root element of modification ${missingMarker[1]}. The attribute value must exactly equal the modification id; preserve the feature-specific content and bounded interaction.`;
+  }
+
+  const mismatchedMarker = message.match(/Maker modification\s+(["'][^"']+["'])\s+has root data-prototype-element\s+(["'][^"']*["'])/i);
+  if (mismatchedMarker) {
+    return ` In modification ${mismatchedMarker[1]}, change the root data-prototype-element value from ${mismatchedMarker[2]} to exactly ${mismatchedMarker[1]}. Update matching scoped CSS and JavaScript selectors to use the same corrected value.`;
+  }
+
   const blockedToken = message.match(/Blocked token:\s*["']([^"']+)["']/i)?.[1];
   if (!blockedToken) return "";
 
