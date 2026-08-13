@@ -49,7 +49,7 @@ export default function Home() {
   const [runError, setRunError] = useState("");
   const [runErrorStage, setRunErrorStage] = useState<StageKey | null>(null);
   const [retryNotice, setRetryNotice] = useState("");
-  const [repairNotice, setRepairNotice] = useState<{ stage: StageKey; attempt: number; maxAttempts: number; reason: string } | null>(null);
+  const [repairNotice, setRepairNotice] = useState<{ stage: StageKey; activity: string; attempt: number; maxAttempts: number; reason: string } | null>(null);
   const [prototypeId, setPrototypeId] = useState("");
   const pipelineRef = useRef<HTMLElement | null>(null);
   const followRunRef = useRef(true);
@@ -114,9 +114,9 @@ export default function Home() {
         const response = await fetch(`${apiBaseUrl}/api/${key}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(requestBody) });
         const payload = await response.json().catch(() => ({ error: `${key} returned an unreadable response.`, retryable: [502, 503, 504].includes(response.status) }));
         if (response.ok) { setRetryNotice(""); setRepairNotice(null); return payload; }
-        if (key === "maker" && response.status === 422 && payload.repairable && payload.repairToken) {
+        if ((key === "maker" || key === "researcher") && response.status === 422 && payload.repairable && payload.repairToken) {
           setRetryNotice("");
-          setRepairNotice({ stage: "maker", attempt: payload.nextAttempt, maxAttempts: payload.maxAttempts, reason: payload.repairReason });
+          setRepairNotice({ stage: key, activity: payload.repairActivity ?? "revising its draft", attempt: payload.nextAttempt, maxAttempts: payload.maxAttempts, reason: payload.repairReason });
           requestBody = { ...body, repairToken: payload.repairToken };
           attempt -= 1;
           continue;
@@ -209,7 +209,7 @@ export default function Home() {
       <div className="studio-pipeline">
         {stages.map((item, index) => <button key={item.key} type="button" className={`pipeline-node ${index === activeStage ? "active" : ""}`} onClick={() => selectStage(index)} aria-pressed={index === activeStage}><span className={`stage-orb ${item.accent}`}>{item.number}</span><span><strong>{item.role}</strong><small>{item.name}</small></span><span className={`stage-status status-${statuses[item.key]}`}>{statuses[item.key] === "running" && <span className="stage-throbber" aria-hidden="true" />}{statuses[item.key] === "running" ? `Working for ${item.key === runningStageKey ? elapsedSeconds : 0} seconds` : statuses[item.key] === "idle" ? "waiting" : statuses[item.key]}</span><p>{item.output}</p></button>)}
       </div>
-      {repairNotice && statuses[repairNotice.stage] === "running" && <div className="agent-repair-banner" role="status"><span className="stage-throbber" aria-hidden="true" /><div><strong>Maker is revising its draft · attempt {repairNotice.attempt} of {repairNotice.maxAttempts}</strong><p>{repairNotice.reason}</p></div></div>}
+      {repairNotice && statuses[repairNotice.stage] === "running" && <div className="agent-repair-banner" role="status"><span className="stage-throbber" aria-hidden="true" /><div><strong>{stages.find((stage) => stage.key === repairNotice.stage)?.role} is {repairNotice.activity} · attempt {repairNotice.attempt} of {repairNotice.maxAttempts}</strong><p>{repairNotice.reason}</p></div></div>}
       <div className="pipeline-boundary"><div><strong>{stages[activeStage].role}</strong><span>AI-generated · verify before use</span></div><p>{activeArtifact?.receivedHandoff ? `Received ${activeArtifact.receivedHandoff.from} artifact ${activeArtifact.receivedHandoff.artifactId}; produced ${activeArtifact.artifactId}.` : activeArtifact ? `Produced Researcher artifact ${activeArtifact.artifactId} for the Designer handoff.` : activeStage === 4 ? "Provides an advisory recommendation and backlog-improvement questions. The Product Manager retains the final decision." : "Cannot approve work, change the backlog or bypass the next evidence handoff."}</p></div>
       <div className="agent-output-workspace" aria-live="polite">
         <div className="agent-request-context">

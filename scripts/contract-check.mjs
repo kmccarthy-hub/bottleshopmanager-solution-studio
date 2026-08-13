@@ -5,7 +5,7 @@ import { isTransientServiceError, serviceStatus } from "../api/_service-errors.j
 import { stageRepairGuidance, stageRepairUserMessage } from "../api/_stage-repair.js";
 import { createMakerRepairToken, readMakerRepairToken } from "../api/_agent-stage.js";
 import { getPrototypeBaselinePackage } from "../domain/prototype-baselines.js";
-import { extractMarketResearch } from "../api/researcher.js";
+import { createResearchRepairToken, extractMarketResearch, readResearchRepairToken } from "../api/researcher.js";
 import { sortIssuesByNumber } from "../api/_github-backlog.js";
 import { createStageTiming } from "../api/_stage-timing.js";
 
@@ -24,6 +24,10 @@ assert.match(stageRepairGuidance("maker", new Error('Artifact validation failed:
 assert.match(stageRepairUserMessage("maker", new Error("Artifact validation failed: Maker CSS length 0 is outside the permitted 80-12000 character range.")), /did not include the required scoped styling/);
 const previousApiKey = process.env.GEMINI_API_KEY;
 process.env.GEMINI_API_KEY = "contract-test-signing-secret";
+const researchRepairPayload = { runId: "research-repair-run", stage: "researcher", attempt: 1, deadlineAt: Date.now() + 120_000, selectedIssueNumber: 4, initialUserTurn: { role: "user" }, functionCall: { name: "fetch_selected_feature_request" }, toolRequestContent: { role: "model" }, toolResult: { selectedIssue: { number: 4 } }, retryInstruction: "Search once." };
+const researchRepairToken = createResearchRepairToken(researchRepairPayload);
+assert.deepEqual(readResearchRepairToken(researchRepairToken), researchRepairPayload);
+assert.throws(() => readResearchRepairToken(`${researchRepairToken.slice(0, -1)}x`), /could not be verified/);
 const makerRepairPayload = { runId: "repair-run", stage: "maker", attempt: 1, deadlineAt: Date.now() + 120_000, failedArtifact: { prototypes: [{ prototypeCss: "" }] }, validationError: "Artifact validation failed: Maker CSS length 0 is outside the permitted 80-12000 character range." };
 const makerRepairToken = createMakerRepairToken(makerRepairPayload);
 assert.deepEqual(readMakerRepairToken(makerRepairToken, "repair-run"), makerRepairPayload);
@@ -32,7 +36,7 @@ assert.throws(() => readMakerRepairToken(makerRepairToken, "different-run"), /di
 if (previousApiKey === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = previousApiKey;
 assert.equal(stageRepairGuidance("designer", new Error('Blocked token: "mailto:".')), "");
 assert.equal(isTransientServiceError({ status: 503, message: "Provider unavailable" }), true);
-assert.throws(() => extractMarketResearch({ id: "interaction-empty", status: "completed", output_text: "Ungrounded response", steps: [{ type: "model_output", content: [{ type: "text", text: "Ungrounded response" }] }] }), /forced Google Search interaction/);
+assert.throws(() => extractMarketResearch({ id: "interaction-empty", status: "completed", output_text: "Ungrounded response", steps: [{ type: "model_output", content: [{ type: "text", text: "Ungrounded response" }] }] }), /No Google Search call was observed/);
 const groundedResearch = extractMarketResearch({ id: "interaction-grounded", status: "completed", output_text: "Grounded evidence", steps: [
   { type: "google_search_call", id: "search-1", arguments: { queries: ["example query"] } },
   { type: "google_search_result", call_id: "search-1", result: [] },
@@ -42,6 +46,15 @@ assert.equal(groundedResearch.receipt.sourceCount, 1);
 assert.equal(groundedResearch.receipt.searchCallCount, 1);
 assert.equal(groundedResearch.receipt.interactionId, "interaction-grounded");
 assert.equal(groundedResearch.receipt.groundingAttempts, 2);
+assert.equal(groundedResearch.receipt.attributionMode, "inline_citations");
+const resultGroundedResearch = extractMarketResearch({ id: "interaction-result-grounded", status: "completed", output_text: "Grounded from result URLs", steps: [
+  { type: "google_search_call", id: "search-result-1", arguments: { query: "single query shape" } },
+  { type: "google_search_result", call_id: "search-result-1", result: [{ title: "Official result", url: "https://example.invalid/official" }] },
+  { type: "model_output", content: [{ type: "text", text: "Grounded from result URLs" }] },
+] });
+assert.equal(resultGroundedResearch.receipt.attributionMode, "search_result_urls");
+assert.deepEqual(resultGroundedResearch.receipt.searchQueries, ["single query shape"]);
+assert.equal(resultGroundedResearch.receipt.sourceCount, 1);
 assert.deepEqual(sortIssuesByNumber([{ number: 2 }, { number: 1 }, { number: 11 }, { number: 3 }]).map((issue) => issue.number), [1, 2, 3, 11]);
 const timing = createStageTiming("maker", "timing-contract-run");
 const measuredTimeout = await timing.measure("contract_test", 1, async (timeoutMs) => timeoutMs);
