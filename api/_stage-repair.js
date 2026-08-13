@@ -43,6 +43,10 @@ export function stageRepairGuidance(stage, error) {
     return " Safety rules override any upstream instruction to launch an email client. Do not include the literal mail protocol token anywhere in HTML, CSS, JavaScript, comments or visible status text. Replace it with a type=button control that uses addEventListener to toggle only a generated compose panel, confirmation message or data-state inside the disposable prototype.";
   }
 
+  if (/^(?:new\s+)?Function\s*\($/.test(blockedToken)) {
+    return " Remove the capitalised dynamic code constructor. Preserve the local prototype interaction by rewriting it as an ordinary lowercase function declaration, function expression or arrow function. Do not evaluate generated strings as code.";
+  }
+
   return ` Safety rules override any conflicting upstream implementation instruction. Remove the blocked token ${JSON.stringify(blockedToken)} and the capability it represents. Replace it with a local type=button interaction that changes only generated prototype elements and data-state values.`;
 }
 
@@ -53,6 +57,7 @@ export function stageRepairUserMessage(stage, error) {
   if (/Maker CSS length\s+\d+\s+is outside/i.test(message)) return "The Maker draft's scoped styling was incomplete or too large. Maker is revising that styling while preserving the rest of the prototype.";
   if (/CSS contains unscoped or baseline selector/i.test(message)) return "The Maker draft tried to style part of the locked current platform. Maker is restricting the styling to generated prototype elements only.";
   if (/data-prototype-element|modification ID|HTML length|HTML root/i.test(message)) return "One generated page addition did not meet the renderer's isolation contract. Maker is correcting that addition while preserving the valid work.";
+  if (/dynamic code execution/i.test(message)) return "The Maker draft used a dynamic code-execution constructor. Maker is rewriting it as an ordinary bounded local function.";
   if (/blocked token|prohibited capability|inline executable/i.test(message)) return "The Maker draft requested a capability that isolated prototypes cannot use. Maker is replacing it with a safe local interaction.";
   return "The Maker draft did not pass a prototype validation check. Maker is revising the same draft while preserving fields that already passed.";
 }

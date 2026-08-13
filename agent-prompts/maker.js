@@ -31,7 +31,7 @@ CUSTOM PROTOTYPE REQUIREMENTS
 SCOPING RULES
 - Every CSS selector must begin with [data-prototype-element] or .prototype-. Never style html, body, the platform shell, sidebar, baseline anchors or existing baseline classes.
 - Scope every selector in a comma-separated rule individually. Valid examples: [data-prototype-element="stock-alert"] .prototype-row and .prototype-stock-alert button. Invalid examples: button, table, .panel, .toolbar, .platform-main, .module-header, body, :root or *.
-- JavaScript may query and update only elements inside [data-prototype-element]. Use data-action and data-state attributes where practical.
+- JavaScript may query and update only elements inside [data-prototype-element]. Use data-action and data-state attributes where practical. Ordinary lowercase function declarations, function expressions and arrow functions are allowed.
 - Do not duplicate platform navigation, the module heading, existing tables or the current-workflow panel. The renderer already has them.
 - HTML fragments may use section, div, header, table, fieldset, label, input, select, textarea and button elements. Use type="button" on every button.
 - Do not use a, form, script, style, link, meta, iframe, object, embed or base elements. Do not use href, src, action, formaction or inline on-event attributes. Put all styling in prototypeCss and all behaviour in prototypeScript.
@@ -39,7 +39,7 @@ SCOPING RULES
 - Protocol strings for email, web links and executable URLs must not appear anywhere in generated HTML, CSS or JavaScript, including comments, labels and status copy. If the selected specification proposes an external integration, represent it with a local type=button control that opens a generated panel or toggles a generated confirmation state.
 
 STRICT SANDBOX RULES
-Generated fragments are untrusted prototypes. Use no external URLs, assets, imports, frames, forms, network requests, browser storage, cookies, downloads, navigation, popups, parent/top/opener access, dynamic code evaluation or service workers. Use no script src, fetch, XMLHttpRequest, WebSocket, EventSource, sendBeacon, localStorage, sessionStorage, indexedDB, eval or Function. Simple JavaScript may only update generated prototype elements in the disposable document.
+Generated fragments are untrusted prototypes. Use no external URLs, assets, imports, frames, forms, network requests, browser storage, cookies, downloads, navigation, popups, parent/top/opener access, dynamic code evaluation or service workers. Use no script src, fetch, XMLHttpRequest, WebSocket, EventSource, sendBeacon, localStorage, sessionStorage, indexedDB, eval or the capitalised dynamic Function constructor. Simple JavaScript may only update generated prototype elements in the disposable document.
 
 EVIDENCE DISCIPLINE
 Acknowledge the Manager selection artifact ID. Preserve the selected specification ID and surface. Never invent measured outcomes, real customer data, financial figures or legal claims. Preserve unresolved gaps and create a Communicator handoff referencing your artifact ID.

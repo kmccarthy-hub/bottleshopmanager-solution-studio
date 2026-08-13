@@ -165,7 +165,8 @@ export function validateDownstreamArtifact(stage, artifact, runId, inputs) {
     const prototypeIds = ids(artifact.prototypes, "conceptId");
     if (prototypeIds.length !== 1 || prototypeIds[0] !== inputs.prototypeSelection?.selectedConceptId || prototypeIds.some((id) => !conceptIds.includes(id))) throw new Error("The Maker must create exactly one prototype for the Manager-selected Designer specification.");
     const baselines = getPrototypeBaselinePackage(concepts);
-    const forbiddenPrototypeRuntime = /<\s*(?:a|iframe|object|embed|base|form|script|style|link|meta)\b|\b(?:fetch|XMLHttpRequest|WebSocket|EventSource|sendBeacon|localStorage|sessionStorage|indexedDB|serviceWorker|window\.open|document\.cookie|window\.parent|window\.top|window\.opener|eval\s*\(|Function\s*\(|(?:window\.|document\.)?location\s*[.=])|https?:\/\/|mailto:|javascript:/i;
+    const forbiddenPrototypeRuntime = /<\s*(?:a|iframe|object|embed|base|form|script|style|link|meta)\b|\b(?:fetch|XMLHttpRequest|WebSocket|EventSource|sendBeacon|localStorage|sessionStorage|indexedDB|serviceWorker|window\.open|document\.cookie|window\.parent|window\.top|window\.opener|eval\s*\(|(?:window\.|document\.)?location\s*[.=])|https?:\/\/|mailto:|javascript:/i;
+    const forbiddenDynamicFunction = /\b(?:new\s+)?Function\s*\(/;
     const forbiddenPrototypeMarkup = new RegExp(`${forbiddenPrototypeRuntime.source}|(?<![\\w-])(?:href|src|action|formaction|target)\\s*=|\\bon\\w+\\s*=`, "i");
     const broadPrototypeCss = /(^|[},])\s*(?:html|body|\*|:root|\.platform-|\.bsm-page|\.module-header|\.current-workflow|\[data-baseline)[^{,]*\{/im;
     for (const prototype of artifact.prototypes) {
@@ -198,6 +199,8 @@ export function validateDownstreamArtifact(stage, artifact, runId, inputs) {
         throw new Error(`Maker CSS contains unscoped or baseline selector ${JSON.stringify(broadCssSelector)}. Every selector must begin with [data-prototype-element] or .prototype-.`);
       }
       const blockedGeneratedCode = generatedCode.match(forbiddenPrototypeRuntime)?.[0];
+      const blockedDynamicFunction = generatedCode.match(forbiddenDynamicFunction)?.[0];
+      if (blockedDynamicFunction) throw new Error(`Maker interactions cannot use dynamic code execution. Blocked token: ${JSON.stringify(blockedDynamicFunction.slice(0, 48))}. Use an ordinary lowercase function declaration, function expression or arrow function instead.`);
       if (prototype.prototypeScript?.length < 80 || prototype.prototypeScript.length > 10000 || blockedGeneratedCode) throw new Error(`Maker interactions must be bounded and cannot request network, storage, navigation, embedding or parent-page capabilities.${blockedGeneratedCode ? ` Blocked token: ${JSON.stringify(blockedGeneratedCode.slice(0, 48))}.` : ""}`);
       if (!prototype.modifications.some((item) => /<button\b/i.test(item.html)) || !/data-prototype-element|\.prototype-/i.test(prototype.prototypeScript)) throw new Error("Every generated page modification must include feature-specific controls and scoped interactive behaviour.");
       if (prototype.baselineAnchorsPreserved?.length < 2 || prototype.baselineAnchorsPreserved.some((anchor) => !baseline.anchors.includes(anchor))) throw new Error("Every generated page must acknowledge at least two verified elements from the relevant current-platform page.");
