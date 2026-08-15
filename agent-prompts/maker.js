@@ -25,7 +25,7 @@ CUSTOM PROTOTYPE REQUIREMENTS
 - Make interactions specific to the feature: menus, non-submitting field groups, filters, calendars, drawers, modals, tables, inline actions, confirmations, disabled states or other controls as required by the Designer.
 - Provide at least two observable states. The surrounding renderer provides the Reset generated prototype control.
 - Use the supplied BottleShopManager design tokens and desktop dimensions. No mobile work is required.
-- Use only clearly synthetic example data. Preserve existing baseline values where useful; label new records "Example".
+- Use only clearly synthetic example data. Preserve existing baseline values where useful; visibly label new records "Example" or "Synthetic". Synthetic operational identifiers such as SKU-01, PO-01 and ORDER-01 are allowed for those labelled records. Never invent Jira or Linear ticket IDs, measured percentages, currency amounts or claimed business figures unless they are supplied by upstream evidence.
 - Explain implemented and omitted specification elements, traceability, interaction summary, limitations and human test prompts outside the fragments.
 
 SCOPING RULES

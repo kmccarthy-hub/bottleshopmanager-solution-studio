@@ -113,6 +113,10 @@ const maker = {
   }),
 };
 validateDownstreamArtifact("maker", maker, "run-1", artifacts);
+assert.doesNotThrow(() => validateDownstreamArtifact("maker", { ...maker, prototypes: maker.prototypes.map((item) => ({ ...item, title: "Synthetic inventory examples SKU-01 and SKU-02 with PO-01" })) }, "run-1", artifacts));
+assert.throws(() => validateDownstreamArtifact("maker", { ...maker, prototypes: maker.prototypes.map((item) => ({ ...item, title: "Linked to JIRA-123" })) }, "run-1", artifacts), /unsupported external identifiers.*JIRA-123/);
+assert.throws(() => validateDownstreamArtifact("maker", { ...maker, prototypes: maker.prototypes.map((item) => ({ ...item, title: "Expected benefit $99" })) }, "run-1", artifacts), /unsupported external identifiers.*\$99/);
+assert.throws(() => validateDownstreamArtifact("maker", { ...maker, prototypes: maker.prototypes.map((item) => ({ ...item, title: "Expected benefit 25%" })) }, "run-1", artifacts), /unsupported external identifiers.*25%/);
 assert.doesNotThrow(() => validateDownstreamArtifact("maker", { ...maker, prototypes: maker.prototypes.map((item) => ({ ...item, prototypeScript: `${item.prototypeScript} function handleGeneratedClick(){document.querySelectorAll("[data-prototype-element]").forEach((root)=>{root.dataset.localState="updated";});}` })) }, "run-1", artifacts));
 assert.doesNotThrow(() => validateDownstreamArtifact("maker", { ...maker, prototypes: maker.prototypes.map((item) => ({ ...item, prototypeScript: `${item.prototypeScript} const handleGeneratedClick=()=>document.querySelectorAll("[data-prototype-element]").forEach((root)=>{root.dataset.localState="updated";});` })) }, "run-1", artifacts));
 assert.throws(() => validateDownstreamArtifact("maker", { ...maker, prototypes: maker.prototypes.map((item) => ({ ...item, prototypeScript: `${item.prototypeScript} const runGenerated=Function("return true");` })) }, "run-1", artifacts), /dynamic code execution.*Blocked token: "Function\("/);

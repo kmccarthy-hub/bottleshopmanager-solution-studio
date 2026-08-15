@@ -11,7 +11,7 @@ const stages = [
 ] as const;
 
 type StageKey = typeof stages[number]["key"];
-type StageStatus = "idle" | "running" | "complete" | "error";
+type StageStatus = "idle" | "running" | "complete" | "error" | "cancelled";
 type BacklogIssue = { number: number; title: string; state: string; labels: string[]; updatedAt: string; sourceUrl: string; body: string };
 type Gap = { category: string; missingInformation: string; whyItMatters: string; questionForProductManager: string; sourceAgents?: string[] };
 type Handoff = { from: string; artifactId: string; summary: string };
@@ -32,6 +32,34 @@ const lensLabel = { recommended_approach: "Recommended approach", alternative_ap
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || window.location.origin).replace(/\/$/, "");
 const formatGapCategory = (category: string) => category.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 
+function createAbortError() {
+  const error = new Error("Pipeline cancelled by the Product Manager.");
+  error.name = "AbortError";
+  return error;
+}
+
+function throwIfAborted(signal: AbortSignal) {
+  if (signal.aborted) throw createAbortError();
+}
+
+function abortableDelay(delayMs: number, signal: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    throwIfAborted(signal);
+    const timer = window.setTimeout(() => {
+      signal.removeEventListener("abort", handleAbort);
+      resolve();
+    }, delayMs);
+    function handleAbort() {
+      window.clearTimeout(timer);
+      signal.removeEventListener("abort", handleAbort);
+      reject(createAbortError());
+    }
+    signal.addEventListener("abort", handleAbort, { once: true });
+  });
+}
+
+const isAbortError = (error: unknown) => error instanceof Error && error.name === "AbortError";
+
 export default function Home() {
   const [workspaceView, setWorkspaceView] = useState<"studio" | "platform">("studio");
   const [backlog, setBacklog] = useState<BacklogIssue[]>([]);
@@ -48,11 +76,15 @@ export default function Home() {
   const [marketResearchReceipt, setMarketResearchReceipt] = useState<{ completedAt: string; sourceCount: number; searchQueries: string[]; sources: { id: string; title: string; url: string }[] } | null>(null);
   const [runError, setRunError] = useState("");
   const [runErrorStage, setRunErrorStage] = useState<StageKey | null>(null);
+  const [runCancelled, setRunCancelled] = useState("");
   const [retryNotice, setRetryNotice] = useState("");
   const [repairNotice, setRepairNotice] = useState<{ stage: StageKey; activity: string; attempt: number; maxAttempts: number; reason: string } | null>(null);
   const [prototypeId, setPrototypeId] = useState("");
   const pipelineRef = useRef<HTMLElement | null>(null);
   const followRunRef = useRef(true);
+  const runAbortRef = useRef<AbortController | null>(null);
+  const runSequenceRef = useRef(0);
+  const runningStageRef = useRef<StageKey | null>(null);
   const apiBaseUrl = API_BASE_URL;
   const selectedIssue = backlog.find((issue) => issue.number === selectedNumber);
   const runActive = Object.values(statuses).includes("running");
@@ -61,6 +93,8 @@ export default function Home() {
   const activeStatus = statuses[activeStageKey];
   const activeHasOutput = activeStageKey === "manager" ? Boolean(artifacts.prototypeSelection || artifacts.manager) : Boolean(artifacts[activeStageKey]);
   const errorStageRole = stages.find((stage) => stage.key === runErrorStage)?.role;
+  const completedIssueNumber = artifacts.manager ? artifacts.researcher?.featureRequest.issueNumber : null;
+  const selectedRunCompleted = completedIssueNumber === selectedNumber;
 
   useEffect(() => {
     if (!apiBaseUrl) return;
@@ -83,10 +117,12 @@ export default function Home() {
   function setStageStatus(key: StageKey, status: StageStatus) {
     setStatuses((current) => ({ ...current, [key]: status }));
     if (status === "running") {
+      runningStageRef.current = key;
       setRunningStageKey(key);
       setStageStartedAt(Date.now());
       setElapsedSeconds(0);
     } else {
+      if (runningStageRef.current === key) runningStageRef.current = null;
       setRunningStageKey(null);
       setStageStartedAt(null);
     }
@@ -101,18 +137,20 @@ export default function Home() {
     setActiveStage(index);
   }
 
-  async function postStage(key: StageKey | "prototype-selection", body: object) {
+  async function postStage(key: StageKey | "prototype-selection", body: object, signal: AbortSignal) {
     const roleLabel = key === "prototype-selection" ? "Manager selection gate" : stages.find((stage) => stage.key === key)?.role ?? key;
     const retryDelays = [0, 5000, 12000, 20000];
     let requestBody = body;
     for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
+      throwIfAborted(signal);
       if (retryDelays[attempt]) {
         setRetryNotice(`${roleLabel} AI service is busy. Automatic retry ${attempt} of ${retryDelays.length - 1}…`);
-        await new Promise((resolve) => window.setTimeout(resolve, retryDelays[attempt]));
+        await abortableDelay(retryDelays[attempt], signal);
       }
       try {
-        const response = await fetch(`${apiBaseUrl}/api/${key}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(requestBody) });
+        const response = await fetch(`${apiBaseUrl}/api/${key}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(requestBody), signal });
         const payload = await response.json().catch(() => ({ error: `${key} returned an unreadable response.`, retryable: [502, 503, 504].includes(response.status) }));
+        throwIfAborted(signal);
         if (response.ok) { setRetryNotice(""); setRepairNotice(null); return payload; }
         if ((key === "maker" || key === "researcher") && response.status === 422 && payload.repairable && payload.repairToken) {
           setRetryNotice("");
@@ -124,6 +162,7 @@ export default function Home() {
         if (!payload.retryable) { setRetryNotice(""); throw new Error(payload.error ?? `${key} could not complete.`); }
         if (attempt === retryDelays.length - 1) { setRetryNotice(""); throw new Error(`${roleLabel} could not reach the AI service after ${retryDelays.length} attempts. Please wait a few minutes and run the request again.`); }
       } catch (error) {
+        if (isAbortError(error) || signal.aborted) throw createAbortError();
         if (error instanceof TypeError && attempt < retryDelays.length - 1) {
           setRetryNotice(`${roleLabel} request was interrupted before a response was readable. Retrying this stage automatically…`);
           continue;
@@ -138,41 +177,86 @@ export default function Home() {
 
   async function exploreSolutions() {
     if (!apiBaseUrl || !selectedNumber) return;
+    const requestedIssueNumber = selectedNumber;
+    const runSequence = runSequenceRef.current + 1;
+    runSequenceRef.current = runSequence;
+    runAbortRef.current?.abort();
+    const controller = new AbortController();
+    runAbortRef.current = controller;
+    const ensureCurrentRun = () => {
+      throwIfAborted(controller.signal);
+      if (runSequenceRef.current !== runSequence) throw createAbortError();
+    };
     followRunRef.current = true;
-    setRunError(""); setRunErrorStage(null); setRetryNotice(""); setRepairNotice(null); setArtifacts({}); setStatuses(initialStatuses); setRunningStageKey(null); setStageStartedAt(null); setElapsedSeconds(0); setToolReceipt(null); setMarketResearchReceipt(null); setPrototypeId("");
+    setRunError(""); setRunErrorStage(null); setRunCancelled(""); setRetryNotice(""); setRepairNotice(null); setArtifacts({}); setStatuses(initialStatuses); setRunningStageKey(null); setStageStartedAt(null); setElapsedSeconds(0); setToolReceipt(null); setMarketResearchReceipt(null); setPrototypeId("");
     window.requestAnimationFrame(() => pipelineRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
     let currentStage: StageKey = "researcher";
     try {
       setActiveStage(0); setStageStatus("researcher", "running");
-      const research = await postStage("researcher", { featureRequestNumber: selectedNumber });
+      const research = await postStage("researcher", { featureRequestNumber: requestedIssueNumber }, controller.signal);
+      ensureCurrentRun();
       const next: Artifacts = { researcher: research.artifact };
       setArtifacts(next); setToolReceipt(research.toolReceipt); setMarketResearchReceipt(research.marketResearchReceipt); setStageStatus("researcher", "complete");
       currentStage = "designer"; setStageStatus("designer", "running");
-      const design = await postStage("designer", { runId: research.runId, artifacts: next });
+      const design = await postStage("designer", { runId: research.runId, artifacts: next }, controller.signal);
+      ensureCurrentRun();
       next.designer = design.artifact; setArtifacts({ ...next }); setStageStatus("designer", "complete"); followStage(1);
 
       currentStage = "manager"; setStageStatus("manager", "running");
-      const selection = await postStage("prototype-selection", { runId: research.runId, artifacts: next });
+      const selection = await postStage("prototype-selection", { runId: research.runId, artifacts: next }, controller.signal);
+      ensureCurrentRun();
       next.prototypeSelection = selection.artifact; setArtifacts({ ...next }); setStageStatus("manager", "idle"); followStage(4);
 
       const selectedConcept = next.designer.concepts.find((concept) => concept.id === next.prototypeSelection?.selectedConceptId);
       if (!selectedConcept) throw new Error("The Manager selection did not match a Designer specification.");
       const makerArtifacts = { researcher: next.researcher, designer: { ...next.designer, concepts: [selectedConcept] }, prototypeSelection: next.prototypeSelection };
       currentStage = "maker"; setStageStatus("maker", "running");
-      const made = await postStage("maker", { runId: research.runId, artifacts: makerArtifacts });
+      const made = await postStage("maker", { runId: research.runId, artifacts: makerArtifacts }, controller.signal);
+      ensureCurrentRun();
       next.maker = made.artifact; setPrototypeId(made.artifact.prototypes[0].conceptId); setArtifacts({ ...next }); setStageStatus("maker", "complete"); followStage(2);
 
       currentStage = "communicator"; setStageStatus("communicator", "running");
       const communicatorArtifacts = { researcher: next.researcher, prototypeSelection: next.prototypeSelection, maker: next.maker };
-      const communication = await postStage("communicator", { runId: research.runId, artifacts: communicatorArtifacts });
+      const communication = await postStage("communicator", { runId: research.runId, artifacts: communicatorArtifacts }, controller.signal);
+      ensureCurrentRun();
       next.communicator = communication.artifact; setArtifacts({ ...next }); setStageStatus("communicator", "complete"); followStage(3);
 
       currentStage = "manager"; setStageStatus("manager", "running");
-      const management = await postStage("manager", { runId: research.runId, artifacts: next });
+      const management = await postStage("manager", { runId: research.runId, artifacts: next }, controller.signal);
+      ensureCurrentRun();
       next.manager = management.artifact; setArtifacts({ ...next }); setStageStatus("manager", "complete"); followStage(4);
     } catch (error) {
+      if (isAbortError(error) || controller.signal.aborted || runSequenceRef.current !== runSequence) return;
       setStageStatus(currentStage, "error"); followStage(stages.findIndex((stage) => stage.key === currentStage)); setRunErrorStage(currentStage); setRunError(error instanceof Error ? error.message : "The agent chain stopped unexpectedly.");
+    } finally {
+      if (runSequenceRef.current === runSequence) runAbortRef.current = null;
     }
+  }
+
+  function cancelPipeline() {
+    const cancelledStage = runningStageRef.current;
+    if (!cancelledStage) return;
+    followRunRef.current = false;
+    runSequenceRef.current += 1;
+    runAbortRef.current?.abort();
+    runAbortRef.current = null;
+    runningStageRef.current = null;
+    setStatuses((current) => ({ ...current, [cancelledStage]: "cancelled" }));
+    setRunningStageKey(null);
+    setStageStartedAt(null);
+    setElapsedSeconds(0);
+    setRetryNotice("");
+    setRepairNotice(null);
+    setRunError("");
+    setRunErrorStage(null);
+    setRunCancelled("Pipeline cancelled by the Product Manager. No further agents will run; the current hosted AI request may take a short time to wind down.");
+  }
+
+  function selectIssue(issueNumber: number) {
+    setSelectedNumber(issueNumber);
+    setRunCancelled("");
+    setRunError("");
+    setRunErrorStage(null);
   }
 
   const currentPrototype = artifacts.maker?.prototypes.find((item) => item.conceptId === prototypeId) ?? artifacts.maker?.prototypes[0];
@@ -192,14 +276,18 @@ export default function Home() {
 
       <aside className="request-selector" aria-label="Select a live backlog request">
         <div className="selector-head"><div><span className="card-kicker">Live BottleShopManager backlog</span><h2>Choose a feature request</h2></div><span className={`source-state source-${backlogState}`}>{backlogState === "ready" ? `${backlog.length} live requests` : backlogState}</span></div>
-        {backlogState === "ready" && <><label htmlFor="feature-request">Feature request</label><select id="feature-request" value={selectedNumber ?? ""} onChange={(event) => setSelectedNumber(Number(event.target.value))} disabled={runActive}>{backlog.map((issue) => <option key={issue.number} value={issue.number}>#{issue.number} · {issue.title}</option>)}</select></>}
+        {backlogState === "ready" && <><label htmlFor="feature-request">Feature request</label><select id="feature-request" value={selectedNumber ?? ""} onChange={(event) => selectIssue(Number(event.target.value))} disabled={runActive}>{backlog.map((issue) => <option key={issue.number} value={issue.number}>#{issue.number} · {issue.title}</option>)}</select></>}
         {backlogState === "loading" && <div className="selector-message">Connecting to the current GitHub backlog…</div>}
         {backlogState === "preview" && <div className="selector-message"><strong>Interface preview</strong><br />Connect the deployed API to load the live backlog. No request has been hardcoded.</div>}
         {backlogState === "error" && <div className="selector-message error"><strong>Backlog unavailable</strong><br />{backlogError}</div>}
         {selectedIssue && <div className="selected-request"><div><span>Selected live issue</span><strong>#{selectedIssue.number} · {selectedIssue.title}</strong></div><a href={selectedIssue.sourceUrl} target="_blank" rel="noreferrer">View source ↗</a><p>{selectedIssue.body.replace(/[*#>]/g, " ").replace(/\s+/g, " ").slice(0, 250)}…</p></div>}
-        <button className="primary-button studio-button" type="button" onClick={exploreSolutions} disabled={runActive || backlogState !== "ready" || !selectedNumber}>{runActive ? `${stages.find((stage) => statuses[stage.key] === "running")?.role ?? "Agent"} is working…` : artifacts.manager ? "Run this request again" : "Explore Solutions"}<span aria-hidden="true">→</span></button>
+        <div className="studio-actions">
+          <button className="primary-button studio-button" type="button" onClick={exploreSolutions} disabled={runActive || backlogState !== "ready" || !selectedNumber}>{runActive ? `${stages.find((stage) => statuses[stage.key] === "running")?.role ?? "Agent"} is working…` : selectedRunCompleted ? "Run this request again" : "Explore Solutions"}<span aria-hidden="true">→</span></button>
+          {runActive && <button className="cancel-pipeline-button" type="button" onClick={cancelPipeline}>Cancel pipeline</button>}
+        </div>
         <p className="decision-note">No feature, roadmap or investment decision is written back.</p>
         {retryNotice && <div className="retry-notice" role="status"><strong>Temporary AI demand</strong><br />{retryNotice}</div>}
+        {runCancelled && <div className="cancelled-notice" role="status"><strong>Pipeline cancelled</strong><br />{runCancelled}</div>}
         {runError && <div className="run-error" role="alert"><strong>Pipeline stopped at {errorStageRole ?? "agent"}:</strong> {runError}</div>}
       </aside>
     </section>
@@ -223,7 +311,7 @@ export default function Home() {
         </div>
         {retryNotice && activeStatus === "running" && <div className="agent-run-notice" role="status"><span className="stage-throbber" aria-hidden="true" /><p><strong>Temporary AI demand</strong>{retryNotice}</p></div>}
 
-        {!activeHasOutput && <div className={`agent-output-placeholder placeholder-${activeStatus}`}><span className={activeStatus === "running" ? "stage-throbber large" : "waiting-orb"} aria-hidden="true" /><div><strong>{activeStatus === "running" ? `${stages[activeStage].role} is working` : activeStatus === "error" ? `${stages[activeStage].role} could not complete` : `${stages[activeStage].role} is waiting`}</strong><p>{activeStatus === "running" ? "The agent is processing its governed handoff. Longer prototype work can take several minutes; its output will appear here when complete." : activeStatus === "error" ? (activeStageKey === runErrorStage && runError ? runError : "Run the selected request again to retry this stage.") : "This agent will begin after it receives the required output from the previous stage."}</p></div></div>}
+        {!activeHasOutput && <div className={`agent-output-placeholder placeholder-${activeStatus}`}><span className={activeStatus === "running" ? "stage-throbber large" : "waiting-orb"} aria-hidden="true" /><div><strong>{activeStatus === "running" ? `${stages[activeStage].role} is working` : activeStatus === "error" ? `${stages[activeStage].role} could not complete` : activeStatus === "cancelled" ? `${stages[activeStage].role} was cancelled` : `${stages[activeStage].role} is waiting`}</strong><p>{activeStatus === "running" ? "The agent is processing its governed handoff. Longer prototype work can take several minutes; its output will appear here when complete." : activeStatus === "error" ? (activeStageKey === runErrorStage && runError ? runError : "Run the selected request again to retry this stage.") : activeStatus === "cancelled" ? "The Product Manager cancelled this run. No further agent handoffs will begin." : "This agent will begin after it receives the required output from the previous stage."}</p></div></div>}
 
       {activeStageKey === "researcher" && artifacts.researcher && <>
       <div className="research-grid">

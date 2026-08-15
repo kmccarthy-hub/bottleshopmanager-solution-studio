@@ -207,8 +207,8 @@ export function validateDownstreamArtifact(stage, artifact, runId, inputs) {
     }
     const makerText = JSON.stringify({ ...artifact, prototypes: artifact.prototypes.map((prototype) => Object.fromEntries(Object.entries(prototype).filter(([key]) => !["modifications", "prototypeCss", "prototypeScript"].includes(key)))) });
     const upstreamText = JSON.stringify({ researcher: inputs.researcher, designer: inputs.designer });
-    const unsupportedTokens = [...(makerText.match(/\b(?:SKU|PO|ORDER|JIRA|LINEAR)-?\d+\b/gi) ?? []), ...(makerText.match(/(?:â‚¬|Â£|\$)\s?\d+(?:\.\d+)?/g) ?? []), ...(makerText.match(/\b\d+(?:\.\d+)?%\b/g) ?? [])].filter((token) => !upstreamText.toLowerCase().includes(token.toLowerCase()));
-    if (unsupportedTokens.length) throw new Error(`The Maker invented unsupported identifiers or figures: ${[...new Set(unsupportedTokens)].join(", ")}. Use an explicit synthetic placeholder instead.`);
+    const unsupportedTokens = [...(makerText.match(/\b(?:JIRA|LINEAR)-?\d+\b/gi) ?? []), ...(makerText.match(/(?:â‚¬|Â£|\$)\s?\d+(?:\.\d+)?/g) ?? []), ...(makerText.match(/\b\d+(?:\.\d+)?%/g) ?? [])].filter((token) => !upstreamText.toLowerCase().includes(token.toLowerCase()));
+    if (unsupportedTokens.length) throw new Error(`The Maker invented unsupported external identifiers or figures: ${[...new Set(unsupportedTokens)].join(", ")}. Synthetic operational identifiers are allowed, but external ticket IDs, currency values and percentages require upstream evidence.`);
     if (artifact.communicatorHandoff?.artifactId !== artifact.artifactId) throw new Error("The Maker handoff must reference its own validated artifact ID.");
   }
   if (stage === "communicator") {
